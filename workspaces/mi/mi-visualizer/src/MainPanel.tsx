@@ -58,6 +58,10 @@ import { Overview } from './views/Overview';
 import { DatamapperForm } from './views/Forms/DatamapperForm';
 import { DataMapperMigrationForm } from './views/Forms/DataMapperMigrationForm';
 import { ImportArtfactForm } from './views/Forms/ImportArtifactForm';
+import { MCPServerWizard } from './views/Forms/MCPServerForm';
+import { MCPServerFromAPIsForm } from './views/Forms/MCPServerForm/MCPServerFromAPIsForm';
+import { MCPServerFromProxyForm } from './views/Forms/MCPServerForm/MCPServerFromProxyForm';
+import { MCPServerBlankForm } from './views/Forms/MCPServerForm/MCPServerBlankForm';
 import { IdpConnectorSchemaGenerateForm }from './views/Forms/IDPConnectorForm/IdpConnectorSchemaGenerateForm';
 import { KubernetesConfigurationForm } from "./views/Forms/KubernetesConfigurationForm";
 import { RegistryPropertyForm } from "./views/Forms/RegistryPropertyForm";
@@ -334,6 +338,18 @@ const MainPanel = (props: MainPanelProps) => {
                 break;
             case MACHINE_VIEW.DataSourceForm:
                 setViewComponent(<DataSourceWizard path={visualizerState.documentUri} />);
+                break;
+            case MACHINE_VIEW.MCPServerForm:
+                setViewComponent(<MCPServerWizard path={visualizerState.documentUri} />);
+                break;
+            case MACHINE_VIEW.MCPServerFromAPIsForm:
+                setViewComponent(<MCPServerFromAPIsForm path={visualizerState.documentUri} />);
+                break;
+            case MACHINE_VIEW.MCPServerFromProxyForm:
+                setViewComponent(<MCPServerFromProxyForm path={visualizerState.documentUri} />);
+                break;
+            case MACHINE_VIEW.MCPServerBlankForm:
+                setViewComponent(<MCPServerBlankForm path={visualizerState.documentUri} />);
                 break;
             case MACHINE_VIEW.ImportArtifactForm:
                 setViewComponent(<ImportArtfactForm />);
