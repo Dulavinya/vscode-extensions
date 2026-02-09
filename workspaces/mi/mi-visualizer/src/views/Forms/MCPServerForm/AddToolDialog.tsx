@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import styled from '@emotion/styled';
 
 interface APIOperation {
@@ -38,12 +38,8 @@ interface AddToolDialogProps {
     isOpen: boolean;
     apis: API[];
     selectedAPIForTool: string;
-    selectedOperationForTool: string;
-    toolNameForDialog: string;
     onAPIChange: (apiId: string) => void;
-    onOperationChange: (operationId: string) => void;
-    onToolNameChange: (name: string) => void;
-    onConfirm: () => void;
+    onConfirmBulk: (apiId: string, selectedOperations: Array<{ id: string; customName: string }>) => void;
     onCancel: () => void;
 }
 
@@ -65,8 +61,10 @@ const DialogContent = styled.div`
     border: 1px solid var(--vscode-panel-border);
     border-radius: 8px;
     padding: 20px;
-    max-width: 500px;
+    max-width: 600px;
     width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 `;
 
@@ -80,8 +78,8 @@ const DialogTitle = styled.h3`
 const DialogField = styled.div`
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    margin-bottom: 12px;
+    gap: 8px;
+    margin-bottom: 15px;
 `;
 
 const DialogLabel = styled.label`
@@ -105,14 +103,83 @@ const DialogSelect = styled.select`
     }
 `;
 
-const DialogInput = styled.input`
+const OperationsList = styled.div`
     background: var(--vscode-input-background);
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 3px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 8px 0;
+`;
+
+const OperationItem = styled.div`
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    
+    &:last-child {
+        border-bottom: none;
+    }
+    
+    &:hover {
+        background: var(--vscode-list-hoverBackground);
+    }
+`;
+
+const OperationItemHeader = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 10px;
+`;
+
+const OperationCheckbox = styled.input`
+    cursor: pointer;
+    accent-color: var(--vscode-focusBorder);
+    margin-top: 2px;
+`;
+
+const OperationDetails = styled.div`
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+`;
+
+const OperationMethod = styled.span<{ method: string }>`
+    font-weight: 600;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 2px;
+    background: ${(props: { method: string }) => {
+        const methods: Record<string, string> = { GET: '#61affe', POST: '#49cc90', PUT: '#fca130', DELETE: '#f93e3e', PATCH: '#50e3c2' };
+        return methods[props.method] || '#999';
+    }};
+    color: white;
+    width: fit-content;
+`;
+
+const OperationPath = styled.span`
+    color: var(--vscode-editor-foreground);
+    font-family: monospace;
+    font-size: 11px;
+`;
+
+const OperationSummary = styled.span`
+    color: var(--vscode-descriptionForeground);
+    font-size: 10px;
+`;
+
+const CustomNameInput = styled.input`
+    background: var(--vscode-editor-background);
     color: var(--vscode-editor-foreground);
     border: 1px solid var(--vscode-input-border);
-    padding: 6px 8px;
+    padding: 4px 6px;
     border-radius: 3px;
-    font-size: 12px;
+    font-size: 11px;
     font-family: inherit;
+    margin-left: 26px;
     
     &:focus {
         outline: none;
@@ -120,13 +187,28 @@ const DialogInput = styled.input`
     }
 `;
 
+const SelectAllCheckbox = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    background: var(--vscode-list-activeSelectionBackground);
+`;
+
 const DialogButtonGroup = styled.div`
     display: flex;
     gap: 10px;
-    justify-content: flex-end;
+    justify-content: space-between;
     margin-top: 15px;
     padding-top: 15px;
     border-top: 1px solid var(--vscode-panel-border);
+`;
+
+const SelectionInfo = styled.span`
+    color: var(--vscode-descriptionForeground);
+    font-size: 12px;
+    align-self: center;
 `;
 
 const DialogBtn = styled.button`
@@ -161,35 +243,92 @@ const DialogAddBtn = styled(DialogBtn)`
     }
 `;
 
+const EmptyMessage = styled.div`
+    color: var(--vscode-descriptionForeground);
+    text-align: center;
+    padding: 20px;
+    font-size: 12px;
+`;
+
 export function AddToolDialog({
     isOpen,
     apis,
     selectedAPIForTool,
-    selectedOperationForTool,
-    toolNameForDialog,
     onAPIChange,
-    onOperationChange,
-    onToolNameChange,
-    onConfirm,
+    onConfirmBulk,
     onCancel,
 }: AddToolDialogProps) {
+    const [selectedOperationIds, setSelectedOperationIds] = useState<Set<string>>(new Set());
+    const [customNames, setCustomNames] = useState<Record<string, string>>({});
+    
     if (!isOpen) return null;
 
     const selectedAPI = apis.find(a => a.id === selectedAPIForTool);
 
+    const handleOperationToggle = (operationId: string) => {
+        const newSet = new Set(selectedOperationIds);
+        if (newSet.has(operationId)) {
+            newSet.delete(operationId);
+        } else {
+            newSet.add(operationId);
+        }
+        setSelectedOperationIds(newSet);
+    };
+
+    const handleCustomNameChange = (operationId: string, name: string) => {
+        setCustomNames(prev => ({
+            ...prev,
+            [operationId]: name
+        }));
+    };
+
+    const handleSelectAll = () => {
+        if (selectedAPI) {
+            if (selectedOperationIds.size === selectedAPI.operations.length) {
+                setSelectedOperationIds(new Set());
+            } else {
+                setSelectedOperationIds(new Set(selectedAPI.operations.map(op => op.id)));
+            }
+        }
+    };
+
+    const handleAPIChange = (apiId: string) => {
+        onAPIChange(apiId);
+        setSelectedOperationIds(new Set());
+        setCustomNames({});
+    };
+
+    const getDefaultName = (operation: APIOperation): string => {
+        return `${operation.method}_${operation.path.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+    };
+
+    const handleConfirm = () => {
+        if (selectedAPIForTool && selectedOperationIds.size > 0) {
+            const selectedOperations = Array.from(selectedOperationIds).map(opId => ({
+                id: opId,
+                customName: customNames[opId] || getDefaultName(
+                    selectedAPI?.operations.find(op => op.id === opId)!
+                )
+            }));
+            onConfirmBulk(selectedAPIForTool, selectedOperations);
+            setSelectedOperationIds(new Set());
+            setCustomNames({});
+        }
+    };
+
+    const allSelected = selectedAPI && selectedOperationIds.size === selectedAPI.operations.length && selectedAPI.operations.length > 0;
+    const someSelected = selectedOperationIds.size > 0;
+
     return (
         <DialogOverlay onClick={onCancel}>
             <DialogContent onClick={(e) => e.stopPropagation()}>
-                <DialogTitle>Add Tool</DialogTitle>
+                <DialogTitle>Add Tools from API Operations</DialogTitle>
 
                 <DialogField>
                     <DialogLabel>Select API</DialogLabel>
                     <DialogSelect
                         value={selectedAPIForTool}
-                        onChange={(e) => {
-                            onAPIChange(e.target.value);
-                            onOperationChange('');
-                        }}
+                        onChange={(e) => handleAPIChange(e.target.value)}
                     >
                         <option value="">-- Choose an API --</option>
                         {apis.map(api => (
@@ -200,42 +339,75 @@ export function AddToolDialog({
                     </DialogSelect>
                 </DialogField>
 
-                {selectedAPIForTool && (
+                {selectedAPIForTool && selectedAPI && (
                     <DialogField>
-                        <DialogLabel>Select Operation</DialogLabel>
-                        <DialogSelect
-                            value={selectedOperationForTool}
-                            onChange={(e) => onOperationChange(e.target.value)}
-                        >
-                            <option value="">-- Choose an operation --</option>
-                            {selectedAPI?.operations.map(op => (
-                                <option key={op.id} value={op.id}>
-                                    {op.method} {op.path} - {op.summary}
-                                </option>
-                            ))}
-                        </DialogSelect>
+                        <DialogLabel>
+                            Select Operations & Custom Names ({selectedOperationIds.size} of {selectedAPI.operations.length})
+                        </DialogLabel>
+                        {selectedAPI.operations.length > 0 ? (
+                            <OperationsList>
+                                <SelectAllCheckbox>
+                                    <OperationCheckbox
+                                        type="checkbox"
+                                        checked={allSelected}
+                                        onChange={handleSelectAll}
+                                        id="select-all"
+                                    />
+                                    <label htmlFor="select-all" style={{ cursor: 'pointer', marginBottom: 0 }}>
+                                        <strong>Select All Operations</strong>
+                                    </label>
+                                </SelectAllCheckbox>
+                                {selectedAPI.operations.map(op => (
+                                    <OperationItem key={op.id}>
+                                        <OperationItemHeader>
+                                            <OperationCheckbox
+                                                type="checkbox"
+                                                checked={selectedOperationIds.has(op.id)}
+                                                onChange={() => handleOperationToggle(op.id)}
+                                                id={op.id}
+                                            />
+                                            <OperationDetails>
+                                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                    <OperationMethod method={op.method}>
+                                                        {op.method}
+                                                    </OperationMethod>
+                                                    <OperationPath>{op.path}</OperationPath>
+                                                </div>
+                                                {op.summary && <OperationSummary>{op.summary}</OperationSummary>}
+                                            </OperationDetails>
+                                        </OperationItemHeader>
+                                        {selectedOperationIds.has(op.id) && (
+                                            <CustomNameInput
+                                                type="text"
+                                                placeholder={getDefaultName(op)}
+                                                value={customNames[op.id] || ''}
+                                                onChange={(e) => handleCustomNameChange(op.id, e.target.value)}
+                                                onClick={(e) => e.stopPropagation()}
+                                            />
+                                        )}
+                                    </OperationItem>
+                                ))}
+                            </OperationsList>
+                        ) : (
+                            <EmptyMessage>No operations available in this API</EmptyMessage>
+                        )}
                     </DialogField>
                 )}
-
-                <DialogField>
-                    <DialogLabel>Tool Name</DialogLabel>
-                    <DialogInput
-                        type="text"
-                        value={toolNameForDialog}
-                        onChange={(e) => onToolNameChange(e.target.value)}
-                        placeholder="e.g., list_users"
-                    />
-                </DialogField>
 
                 <DialogButtonGroup>
                     <DialogCancelBtn onClick={onCancel}>
                         Cancel
                     </DialogCancelBtn>
+                    {someSelected && (
+                        <SelectionInfo>
+                            {selectedOperationIds.size} operation{selectedOperationIds.size !== 1 ? 's' : ''} selected
+                        </SelectionInfo>
+                    )}
                     <DialogAddBtn
-                        onClick={onConfirm}
-                        disabled={!selectedAPIForTool || !selectedOperationForTool || !toolNameForDialog.trim()}
+                        onClick={handleConfirm}
+                        disabled={!selectedAPIForTool || !someSelected}
                     >
-                        Add Tool
+                        Add Selected Tools ({selectedOperationIds.size})
                     </DialogAddBtn>
                 </DialogButtonGroup>
             </DialogContent>
@@ -244,3 +416,4 @@ export function AddToolDialog({
 }
 
 export default AddToolDialog;
+
