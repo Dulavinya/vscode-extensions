@@ -255,6 +255,43 @@ const schema = yup.object({
         .matches(/^[a-zA-Z0-9_-]+$/, 'Server name can only contain letters, numbers, hyphens, and underscores'),
 });
 
+// Define artifact parsing configuration (same approach as ProjectStructureView)
+const artifactParserConfig = {
+    apis: {
+        pathInStructure: (structure: any) => structure?.directoryMap?.src?.main?.wso2mi?.artifacts?.apis || [],
+        parseFields: {
+            id: (art: Record<string, any>) => art.name || art.id || art.fileName || '',
+            name: (art: Record<string, any>) => art.name || art.id || art.fileName || '',
+            context: (art: Record<string, any>) => art.context || `/${art.name || art.id || ''}`,
+            version: (art: Record<string, any>) => art.version || '1.0.0',
+        },
+        parseOperations: (art: Record<string, any>): APIOperation[] => {
+            const operations: APIOperation[] = [];
+            if (art.resources && Array.isArray(art.resources)) {
+                for (const res of art.resources) {
+                    const methods = Array.isArray(res.methods)
+                        ? res.methods
+                        : typeof res.methods === 'string'
+                        ? res.methods.split(',')
+                        : [];
+                    const uri = res.path || res.uri || res['uri-template'] || res.uriTemplate || '';
+
+                    for (const m of methods) {
+                        const method = String(m).toUpperCase();
+                        operations.push({
+                            id: `${method}_${uri}`.replace(/[^a-zA-Z0-9_]/g, '_'),
+                            method,
+                            path: uri,
+                            summary: res.summary || ''
+                        });
+                    }
+                }
+            }
+            return operations;
+        }
+    }
+};
+
 export interface MCPServerFromAPIsFormProps {
     path: string;
 }
@@ -273,8 +310,6 @@ export function MCPServerFromAPIsForm({ path }: MCPServerFromAPIsFormProps) {
     const [error, setError] = useState<string | null>(null);
     const [showAddToolDialog, setShowAddToolDialog] = useState(false);
     const [selectedAPIForTool, setSelectedAPIForTool] = useState<string>('');
-    const [selectedOperationForTool, setSelectedOperationForTool] = useState<string>('');
-    const [toolNameForDialog, setToolNameForDialog] = useState('');
 
     // Fetch APIs with their operations
     useEffect(() => {
@@ -282,82 +317,76 @@ export function MCPServerFromAPIsForm({ path }: MCPServerFromAPIsFormProps) {
             try {
                 setLoading(true);
                 setError(null);
+                
+                let projectUri = path;
+                const artifactsIndex = projectUri.indexOf('/artifacts');
+                if (artifactsIndex !== -1) {
+                    projectUri = projectUri.substring(0, artifactsIndex).replace(/\/src\/main\/wso2mi$/, '');
+                }
 
-                // Mock data - in real app, fetch from project
-                const mockAPIs: API[] = [
-                    {
-                        id: 'api1',
-                        name: 'UserAPI',
-                        context: '/users',
-                        version: '1.0.0',
-                        operations: [
-                            { id: 'op1', method: 'GET', path: '/users', summary: 'List all users' },
-                            { id: 'op2', method: 'POST', path: '/users', summary: 'Create user' },
-                            { id: 'op3', method: 'GET', path: '/users/{id}', summary: 'Get user by ID' },
-                            { id: 'op4', method: 'PUT', path: '/users/{id}', summary: 'Update user' },
-                            { id: 'op5', method: 'DELETE', path: '/users/{id}', summary: 'Delete user' },
-                        ]
-                    },
-                    {
-                        id: 'api2',
-                        name: 'ProductAPI',
-                        context: '/products',
-                        version: '1.0.0',
-                        operations: [
-                            { id: 'op6', method: 'GET', path: '/products', summary: 'List products' },
-                            { id: 'op7', method: 'POST', path: '/products', summary: 'Create product' },
-                        ]
-                    },
-                ];
+                // Fetch project structure
+                const projectStructure = await rpcClient.getMiVisualizerRpcClient().getProjectStructure({
+                    documentUri: projectUri
+                });
 
-                setApis(mockAPIs);
+                const apiArtifacts = artifactParserConfig.apis.pathInStructure(projectStructure);
+                const parsedAPIs: API[] = apiArtifacts.map((art: Record<string, any>) => ({
+                    id: artifactParserConfig.apis.parseFields.id(art),
+                    name: artifactParserConfig.apis.parseFields.name(art),
+                    context: artifactParserConfig.apis.parseFields.context(art),
+                    version: artifactParserConfig.apis.parseFields.version(art),
+                    operations: artifactParserConfig.apis.parseOperations(art)
+                }));
+
+                if (parsedAPIs.length > 0) {
+                    setApis(parsedAPIs);
+                } else {
+                    setApis([]);
+                    setError('No APIs found in the project');
+                }
             } catch (err) {
                 console.error('Error loading APIs:', err);
-                setError('Failed to load APIs from project');
+                setError(`Failed to load APIs from project: ${err instanceof Error ? err.message : String(err)}`);
             } finally {
                 setLoading(false);
             }
         };
 
         loadAPIs();
-    }, []);
+    }, [rpcClient, path]);
 
     const openAddToolDialog = () => {
         setShowAddToolDialog(true);
         setSelectedAPIForTool('');
-        setSelectedOperationForTool('');
-        setToolNameForDialog('');
     };
 
     const closeAddToolDialog = () => {
         setShowAddToolDialog(false);
         setSelectedAPIForTool('');
-        setSelectedOperationForTool('');
-        setToolNameForDialog('');
     };
 
-    const confirmAddTool = () => {
-        if (!selectedAPIForTool || !selectedOperationForTool || !toolNameForDialog.trim()) {
-            setError('Please select an API, operation, and provide a tool name');
-            return;
-        }
+    const confirmAddBulkTools = (apiId: string, selectedOperations: Array<{ id: string; customName: string }>) => {
+        const api = apis.find(a => a.id === apiId);
+        if (!api) return;
 
-        const api = apis.find(a => a.id === selectedAPIForTool);
-        const operation = api?.operations.find(o => o.id === selectedOperationForTool);
+        const newTools: Tool[] = selectedOperations
+            .map(selectedOp => {
+                const operation = api.operations.find(o => o.id === selectedOp.id);
+                if (!operation) return null;
 
-        if (!api || !operation) return;
+                return {
+                    id: `tool-${Date.now()}-${selectedOp.id}`,
+                    name: selectedOp.customName.trim() || `${operation.method}_${operation.path.replace(/[^a-zA-Z0-9_]/g, '_')}`,
+                    apiId: api.id,
+                    apiName: api.name,
+                    operationId: operation.id,
+                    operationMethod: operation.method,
+                    operationPath: operation.path,
+                };
+            })
+            .filter((tool): tool is Tool => tool !== null);
 
-        const newTool: Tool = {
-            id: `tool-${Date.now()}`,
-            name: toolNameForDialog,
-            apiId: api.id,
-            apiName: api.name,
-            operationId: operation.id,
-            operationMethod: operation.method,
-            operationPath: operation.path,
-        };
-
-        setTools([...tools, newTool]);
+        setTools([...tools, ...newTools]);
         closeAddToolDialog();
         setError(null);
     };
@@ -490,18 +519,13 @@ export function MCPServerFromAPIsForm({ path }: MCPServerFromAPIsFormProps) {
                         </ButtonGroup>
                     </form>
                 </Container>
-
                 {/* Add Tool Dialog */}
                 <AddToolDialog
                     isOpen={showAddToolDialog}
                     apis={apis}
                     selectedAPIForTool={selectedAPIForTool}
-                    selectedOperationForTool={selectedOperationForTool}
-                    toolNameForDialog={toolNameForDialog}
                     onAPIChange={setSelectedAPIForTool}
-                    onOperationChange={setSelectedOperationForTool}
-                    onToolNameChange={setToolNameForDialog}
-                    onConfirm={confirmAddTool}
+                    onConfirmBulk={confirmAddBulkTools}
                     onCancel={closeAddToolDialog}
                 />
             </ViewContent>
