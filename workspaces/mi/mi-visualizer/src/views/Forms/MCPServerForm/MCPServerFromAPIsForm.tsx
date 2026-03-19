@@ -26,6 +26,7 @@ import { useVisualizerContext } from '@wso2/mi-rpc-client';
 import { EVENT_TYPE, MACHINE_VIEW } from '@wso2/mi-core';
 import { View, ViewContent, ViewHeader } from '../../../components/View';
 import AddToolDialog from './AddToolDialog';
+import * as pathModule from 'path';
 
 // Types
 interface APIOperation {
@@ -255,7 +256,66 @@ const schema = yup.object({
         .matches(/^[a-zA-Z0-9_-]+$/, 'Server name can only contain letters, numbers, hyphens, and underscores'),
 });
 
-// Define artifact parsing configuration (same approach as ProjectStructureView)
+/**
+ * Generate MCP local-entry XML with tools from selected APIs and operations
+ */
+function generateMCPLocalEntryXml(serverName: string, tools: Tool[]): string {
+    let toolsXml = '';
+    
+    tools.forEach((tool) => {
+        const descriptionText = tool.operationPath 
+            ? `${tool.operationMethod} ${tool.operationPath} - ${tool.apiName}`
+            : `${tool.operationMethod} - ${tool.apiName}`;
+        
+        // Generate JSON Schema for input (simplified version)
+        const inputSchema = {
+            type: "object",
+            properties: {},
+            additionalProperties: false
+        };
+
+        const toolXml = `
+        <!-- ${descriptionText} -->
+        <tool name="${tool.name}">
+            <api>${tool.apiName}</api>
+            <resource>${tool.operationPath}</resource>
+            <method>${tool.operationMethod}</method>
+            <description>${descriptionText}</description>
+            <inputSchema>
+                ${JSON.stringify(inputSchema, null, 16).split('\n').map(line => '                ' + line).join('\n')}
+            </inputSchema>
+        </tool>`;
+        
+        toolsXml += toolXml;
+    });
+
+    const localEntryXml = `<?xml version="1.0" encoding="UTF-8"?>
+<localEntry key="${serverName}-mcp-config" xmlns="http://ws.apache.org/ns/synapse">
+    <mcptools>${toolsXml}
+    </mcptools>
+</localEntry>`;
+
+    return localEntryXml;
+}
+
+/**
+ * Generate MCP inbound-endpoint XML
+ */
+function generateMCPInboundEndpointXml(serverName: string, localEntryName: string): string {
+    const inboundEndpointXml = `<?xml version="1.0" encoding="UTF-8"?>
+<inboundEndpoint name="${serverName}-endpoint" sequence="" onError="" class="org.wso2.carbon.inbound.SSE.McpInboundListener" xmlns="http://ws.apache.org/ns/synapse">
+    <parameters xmlns="http://ws.apache.org/ns/synapse">
+        <parameter name="inbound.mcp.port">8300</parameter>
+        <parameter name="inbound.http.port">8300</parameter>
+        <parameter name="inbound.http.context">/mcp</parameter>
+        <parameter name="mcp.tools.localentry">${localEntryName}</parameter>
+        <parameter name="inbound.behavior">listening</parameter>
+    </parameters>
+</inboundEndpoint>`;
+
+    return inboundEndpointXml;
+}
+
 const artifactParserConfig = {
     apis: {
         pathInStructure: (structure: any) => structure?.directoryMap?.src?.main?.wso2mi?.artifacts?.apis || [],
@@ -409,20 +469,56 @@ export function MCPServerFromAPIsForm({ path }: MCPServerFromAPIsFormProps) {
         try {
             setError(null);
 
-            const mcpConfig = {
-                name: data.serverName,
-                type: 'from-apis',
-                tools: tools.map(t => ({
-                    toolName: t.name,
-                    apiId: t.apiId,
-                    apiName: t.apiName,
-                    operationMethod: t.operationMethod,
-                    operationPath: t.operationPath,
-                })),
-            };
+            // Get project root to determine artifact directories
+            const projectRootResp = await rpcClient.getMiDiagramRpcClient().getProjectRoot({ path });
+            const projectDir = projectRootResp.path;
 
-            console.log('MCP Server config:', mcpConfig);
+            // Compute artifact directories
+            const localEntriesDir = pathModule.join(projectDir, 'src', 'main', 'wso2mi', 'artifacts', 'local-entries').toString();
+            const inboundEndpointsDir = pathModule.join(projectDir, 'src', 'main', 'wso2mi', 'artifacts', 'inbound-endpoints').toString();
 
+            // Generate local-entry XML with MCP tools configuration
+            const localEntryName = `${data.serverName}-mcp-config`;
+            const localEntryXml = generateMCPLocalEntryXml(data.serverName, tools);
+
+            // Create local-entry artifact
+            await rpcClient.getMiDiagramRpcClient().createLocalEntry({
+                directory: localEntriesDir,
+                name: localEntryName,
+                type: 'In-Line XML Entry',
+                value: localEntryXml,
+                URL: '',
+                getContentOnly: false
+            });
+
+            // Generate inbound-endpoint XML with reference to local-entry
+            const inboundEndpointXml = generateMCPInboundEndpointXml(data.serverName, localEntryName);
+
+            // Create inbound-endpoint artifact
+            await rpcClient.getMiDiagramRpcClient().createInboundEndpoint({
+                directory: inboundEndpointsDir,
+                attributes: {
+                    name: `${data.serverName}-endpoint`,
+                    sequence: '',
+                    onError: '',
+                    class: 'org.wso2.carbon.inbound.SSE.McpInboundListener'
+                },
+                parameters: {
+                    'inbound.mcp.port': 8300,
+                    'inbound.http.port': 8300,
+                    'inbound.http.context': '/mcp',
+                    'mcp.tools.localentry': localEntryName,
+                    'inbound.behavior': 'listening'
+                }
+            });
+
+            // Show success notification
+            await rpcClient.getMiVisualizerRpcClient().showNotification({
+                message: `MCP Server "${data.serverName}" created successfully with ${tools.length} tool(s)`,
+                type: 'info'
+            });
+
+            // Navigate back to overview
             rpcClient.getMiVisualizerRpcClient().openView({
                 type: EVENT_TYPE.OPEN_VIEW,
                 location: { view: MACHINE_VIEW.Overview }
