@@ -39,7 +39,7 @@ interface AddToolDialogProps {
     apis: API[];
     selectedAPIForTool: string;
     onAPIChange: (apiId: string) => void;
-    onConfirmBulk: (apiId: string, selectedOperations: Array<{ id: string; customName: string }>) => void;
+    onConfirmBulk: (apiId: string, selectedOperations: Array<{ id: string; customName: string; description: string }>) => void;
     onCancel: () => void;
 }
 
@@ -260,6 +260,7 @@ export function AddToolDialog({
 }: AddToolDialogProps) {
     const [selectedOperationIds, setSelectedOperationIds] = useState<Set<string>>(new Set());
     const [customNames, setCustomNames] = useState<Record<string, string>>({});
+    const [customDescriptions, setCustomDescriptions] = useState<Record<string, string>>({});
     
     if (!isOpen) return null;
 
@@ -282,6 +283,13 @@ export function AddToolDialog({
         }));
     };
 
+    const handleCustomDescriptionChange = (operationId: string, description: string) => {
+        setCustomDescriptions(prev => ({
+            ...prev,
+            [operationId]: description
+        }));
+    };
+
     const handleSelectAll = () => {
         if (selectedAPI) {
             if (selectedOperationIds.size === selectedAPI.operations.length) {
@@ -296,10 +304,16 @@ export function AddToolDialog({
         onAPIChange(apiId);
         setSelectedOperationIds(new Set());
         setCustomNames({});
+        setCustomDescriptions({});
     };
 
     const getDefaultName = (operation: APIOperation): string => {
-        return `${operation.method}_${operation.path.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+        const cleanPath = operation.path
+            .replace(/[{}]/g, '')
+            .replace(/[^a-zA-Z0-9]/g, '_')
+            .replace(/_{2,}/g, '_')
+            .replace(/^_+|_+$/g, '');
+        return `${operation.method}_${cleanPath}`;
     };
 
     const handleConfirm = () => {
@@ -308,11 +322,13 @@ export function AddToolDialog({
                 id: opId,
                 customName: customNames[opId] || getDefaultName(
                     selectedAPI?.operations.find(op => op.id === opId)!
-                )
+                ),
+                description: customDescriptions[opId] || ''
             }));
             onConfirmBulk(selectedAPIForTool, selectedOperations);
             setSelectedOperationIds(new Set());
             setCustomNames({});
+            setCustomDescriptions({});
         }
     };
 
@@ -377,13 +393,22 @@ export function AddToolDialog({
                                             </OperationDetails>
                                         </OperationItemHeader>
                                         {selectedOperationIds.has(op.id) && (
-                                            <CustomNameInput
-                                                type="text"
-                                                placeholder={getDefaultName(op)}
-                                                value={customNames[op.id] || ''}
-                                                onChange={(e) => handleCustomNameChange(op.id, e.target.value)}
-                                                onClick={(e) => e.stopPropagation()}
-                                            />
+                                            <>
+                                                <CustomNameInput
+                                                    type="text"
+                                                    placeholder={getDefaultName(op)}
+                                                    value={customNames[op.id] || ''}
+                                                    onChange={(e) => handleCustomNameChange(op.id, e.target.value)}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                />
+                                                <CustomNameInput
+                                                    type="text"
+                                                    placeholder="Tool description (e.g. Retrieves customer by ID)"
+                                                    value={customDescriptions[op.id] || ''}
+                                                    onChange={(e) => handleCustomDescriptionChange(op.id, e.target.value)}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                />
+                                            </>
                                         )}
                                     </OperationItem>
                                 ))}
