@@ -27,6 +27,7 @@ import { EVENT_TYPE, MACHINE_VIEW } from '@wso2/mi-core';
 import { View, ViewContent, ViewHeader } from '../../../components/View';
 import AddToolDialog from './AddToolDialog';
 import * as pathModule from 'path';
+import * as yaml from 'yaml';
 
 // Types
 interface APIOperation {
@@ -41,17 +42,24 @@ interface API {
     name: string;
     context: string;
     version: string;
+    rawVersion: string;
+    xmlPath: string;
     operations: APIOperation[];
 }
 
 interface Tool {
     id: string;
     name: string;
+    description: string;
     apiId: string;
     apiName: string;
+    apiVersion: string;
+    apiRawVersion: string;
+    apiXmlPath: string;
     operationId: string;
     operationMethod: string;
     operationPath: string;
+    operationSummary: string;
 }
 
 // Styled Components
@@ -256,46 +264,83 @@ const schema = yup.object({
         .matches(/^[a-zA-Z0-9_-]+$/, 'Server name can only contain letters, numbers, hyphens, and underscores'),
 });
 
+function cleanPathForToolName(path: string): string {
+    return path
+        .replace(/[{}]/g, '')           
+        .replace(/[^a-zA-Z0-9]/g, '_') 
+        .replace(/_{2,}/g, '_')         
+        .replace(/^_+|_+$/g, '');       
+}
+
 /**
- * Generate MCP local-entry XML with tools from selected APIs and operations
+ * Extract JSON Schema for an operation's inputs from a parsed OpenAPI spec.
  */
-function generateMCPLocalEntryXml(serverName: string, tools: Tool[]): string {
+function extractInputSchema(spec: any, method: string, operationPath: string): object {
+    const pathItem = spec?.paths?.[operationPath];
+    if (!pathItem) return { type: 'object', properties: {}, additionalProperties: false };
+
+    const operation = pathItem[method.toLowerCase()];
+    if (!operation) return { type: 'object', properties: {}, additionalProperties: false };
+
+    const properties: Record<string, any> = {};
+    const required: string[] = [];
+
+    // Path parameters only
+    if (Array.isArray(operation.parameters)) {
+        for (const param of operation.parameters) {
+            if (param.in === 'path' && param.name && param.schema) {
+                properties[param.name] = {
+                    ...param.schema,
+                    ...(param.description ? { description: param.description } : {})
+                };
+                if (param.required) {
+                    required.push(param.name);
+                }
+            }
+        }
+    }
+
+    // Request body (application/json)
+    const bodySchema = operation.requestBody?.content?.['application/json']?.schema;
+    if (bodySchema?.properties) {
+        for (const [key, value] of Object.entries(bodySchema.properties)) {
+            properties[key] = value;
+        }
+        if (Array.isArray(bodySchema.required)) {
+            required.push(...bodySchema.required);
+        }
+    }
+
+    const schema: any = { type: 'object', properties, additionalProperties: false };
+    if (required.length > 0) schema.required = required;
+    return schema;
+}
+
+function generateMCPLocalEntryXml(serverName: string, tools: Tool[], inputSchemas: Record<string, object>): string {
     let toolsXml = '';
-    
+
     tools.forEach((tool) => {
-        const descriptionText = tool.operationPath 
-            ? `${tool.operationMethod} ${tool.operationPath} - ${tool.apiName}`
-            : `${tool.operationMethod} - ${tool.apiName}`;
-        
-        // Generate JSON Schema for input (simplified version)
-        const inputSchema = {
-            type: "object",
-            properties: {},
-            additionalProperties: false
-        };
+        const description = tool.description || tool.operationSummary ||
+            `${tool.operationMethod} ${tool.operationPath} - ${tool.apiName}`;
+        const inputSchema = inputSchemas[tool.id] || { type: 'object', properties: {} };
 
         const toolXml = `
-        <!-- ${descriptionText} -->
-        <tool name="${tool.name}">
-            <api>${tool.apiName}</api>
-            <resource>${tool.operationPath}</resource>
-            <method>${tool.operationMethod}</method>
-            <description>${descriptionText}</description>
-            <inputSchema>
-                ${JSON.stringify(inputSchema, null, 16).split('\n').map(line => '                ' + line).join('\n')}
-            </inputSchema>
-        </tool>`;
-        
+            <tool name="${tool.name}">
+                <api>${tool.apiName}</api>
+                <resource>${tool.operationPath}</resource>
+                <method>${tool.operationMethod}</method>
+                <description>${description}</description>
+                <inputSchema>${JSON.stringify(inputSchema)}</inputSchema>
+            </tool>`;
+
         toolsXml += toolXml;
     });
 
-    const localEntryXml = `<?xml version="1.0" encoding="UTF-8"?>
-<localEntry key="${serverName}-mcp-config" xmlns="http://ws.apache.org/ns/synapse">
-    <mcptools>${toolsXml}
-    </mcptools>
-</localEntry>`;
+    const mcptoolsFragment = `
+        <mcptools>${toolsXml}
+        </mcptools>`;
 
-    return localEntryXml;
+    return mcptoolsFragment;
 }
 
 /**
@@ -324,6 +369,8 @@ const artifactParserConfig = {
             name: (art: Record<string, any>) => art.name || art.id || art.fileName || '',
             context: (art: Record<string, any>) => art.context || `/${art.name || art.id || ''}`,
             version: (art: Record<string, any>) => art.version || '1.0.0',
+            rawVersion: (art: Record<string, any>) => art.version ?? '',
+            xmlPath: (art: Record<string, any>) => art.path || '',
         },
         parseOperations: (art: Record<string, any>): APIOperation[] => {
             const operations: APIOperation[] = [];
@@ -395,6 +442,8 @@ export function MCPServerFromAPIsForm({ path }: MCPServerFromAPIsFormProps) {
                     name: artifactParserConfig.apis.parseFields.name(art),
                     context: artifactParserConfig.apis.parseFields.context(art),
                     version: artifactParserConfig.apis.parseFields.version(art),
+                    rawVersion: artifactParserConfig.apis.parseFields.rawVersion(art),
+                    xmlPath: artifactParserConfig.apis.parseFields.xmlPath(art),
                     operations: artifactParserConfig.apis.parseOperations(art)
                 }));
 
@@ -425,7 +474,7 @@ export function MCPServerFromAPIsForm({ path }: MCPServerFromAPIsFormProps) {
         setSelectedAPIForTool('');
     };
 
-    const confirmAddBulkTools = (apiId: string, selectedOperations: Array<{ id: string; customName: string }>) => {
+    const confirmAddBulkTools = (apiId: string, selectedOperations: Array<{ id: string; customName: string; description: string }>) => {
         const api = apis.find(a => a.id === apiId);
         if (!api) return;
 
@@ -434,14 +483,20 @@ export function MCPServerFromAPIsForm({ path }: MCPServerFromAPIsFormProps) {
                 const operation = api.operations.find(o => o.id === selectedOp.id);
                 if (!operation) return null;
 
+                const defaultName = `${operation.method}_${cleanPathForToolName(operation.path)}`;
                 return {
                     id: `tool-${Date.now()}-${selectedOp.id}`,
-                    name: selectedOp.customName.trim() || `${operation.method}_${operation.path.replace(/[^a-zA-Z0-9_]/g, '_')}`,
+                    name: selectedOp.customName.trim() || defaultName,
+                    description: selectedOp.description.trim(),
                     apiId: api.id,
                     apiName: api.name,
+                    apiVersion: api.version,
+                    apiRawVersion: api.rawVersion,
+                    apiXmlPath: api.xmlPath,
                     operationId: operation.id,
                     operationMethod: operation.method,
                     operationPath: operation.path,
+                    operationSummary: operation.summary || '',
                 };
             })
             .filter((tool): tool is Tool => tool !== null);
@@ -477,9 +532,48 @@ export function MCPServerFromAPIsForm({ path }: MCPServerFromAPIsFormProps) {
             const localEntriesDir = pathModule.join(projectDir, 'src', 'main', 'wso2mi', 'artifacts', 'local-entries').toString();
             const inboundEndpointsDir = pathModule.join(projectDir, 'src', 'main', 'wso2mi', 'artifacts', 'inbound-endpoints').toString();
 
+            const apiDefDir = pathModule.join(
+                projectDir, 'src', 'main', 'wso2mi', 'resources', 'api-definitions'
+            ).toString();
+            const yamlCache: Record<string, any> = {};
+            const inputSchemas: Record<string, object> = {};
+
+            const readYaml = async (filePath: string): Promise<any> => {
+                if (yamlCache.hasOwnProperty(filePath)) return yamlCache[filePath];
+                try {
+                    const resp = await rpcClient.getMiDiagramRpcClient().readIdpSchemaFileContent({ filePath });
+                    yamlCache[filePath] = resp.fileContent ? yaml.parse(resp.fileContent) : null;
+                } catch {
+                    yamlCache[filePath] = null;
+                }
+                return yamlCache[filePath];
+            };
+
+            for (const tool of tools) {
+                const rawVersion = tool.apiRawVersion || '';
+                const xmlBaseName = tool.apiXmlPath
+                    ? pathModule.basename(tool.apiXmlPath, pathModule.extname(tool.apiXmlPath))
+                    : tool.apiName;
+                
+                const candidates = [
+                    ...(rawVersion ? [`${xmlBaseName}_v${rawVersion}.yaml`] : []),
+                    `${xmlBaseName}.yaml`,
+                ].map(f => pathModule.join(apiDefDir, f).toString());
+
+                let spec: any = null;
+                for (const candidate of candidates) {
+                    spec = await readYaml(candidate);
+                    if (spec !== null) break;
+                }
+
+                inputSchemas[tool.id] = spec
+                    ? extractInputSchema(spec, tool.operationMethod, tool.operationPath)
+                    : { type: 'object', properties: {}, additionalProperties: false };
+            }
+
             // Generate local-entry XML with MCP tools configuration
             const localEntryName = `${data.serverName}-mcp-config`;
-            const localEntryXml = generateMCPLocalEntryXml(data.serverName, tools);
+            const localEntryXml = generateMCPLocalEntryXml(data.serverName, tools, inputSchemas);
 
             // Create local-entry artifact
             await rpcClient.getMiDiagramRpcClient().createLocalEntry({
@@ -491,7 +585,6 @@ export function MCPServerFromAPIsForm({ path }: MCPServerFromAPIsFormProps) {
                 getContentOnly: false
             });
 
-            // Generate inbound-endpoint XML with reference to local-entry
             const inboundEndpointXml = generateMCPInboundEndpointXml(data.serverName, localEntryName);
 
             // Create inbound-endpoint artifact
