@@ -97,24 +97,28 @@ const SectionLabel = styled.label`
     display: block;
 `;
 
-const OperationsContainer = styled.div`
-    border-top: 1px solid var(--vscode-panel-border);
+const ToolsSectionHeader = styled.div`
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 `;
 
-const OperationRow = styled.div`
+const ToolInfo = styled.div`
     display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--vscode-panel-border);
-    
-    &:hover {
-        background: var(--vscode-list-hoverBackground);
-    }
-    
-    &:last-child {
-        border-bottom: none;
-    }
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+`;
+
+const ToolName = styled.span`
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--vscode-editor-foreground);
+`;
+
+const ToolDescription = styled.span`
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
 `;
 
 const MethodBadge = styled.span<{ method: string }>`
@@ -130,40 +134,6 @@ const MethodBadge = styled.span<{ method: string }>`
     color: white;
     min-width: 45px;
     text-align: center;
-`;
-
-const OperationPath = styled.span`
-    color: var(--vscode-editor-foreground);
-    font-family: monospace;
-    font-size: 12px;
-    flex: 1;
-`;
-
-const OperationSummary = styled.span`
-    color: var(--vscode-descriptionForeground);
-    font-size: 12px;
-`;
-
-const AddToolBtn = styled.button`
-    padding: 4px 8px;
-    font-size: 11px;
-    background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
-    border: none;
-    border-radius: 3px;
-    cursor: pointer;
-    white-space: nowrap;
-    
-    &:hover {
-        background: var(--vscode-button-hoverBackground);
-    }
-`;
-
-const ToolsSection = styled.div`
-    padding: 15px;
-    border: 1px solid var(--vscode-panel-border);
-    border-radius: 4px;
-    background: var(--vscode-input-background);
 `;
 
 const ToolsList = styled.div`
@@ -183,20 +153,6 @@ const ToolItem = styled.div`
     border-radius: 3px;
 `;
 
-const ToolNameInput = styled.input`
-    flex: 1;
-    background: var(--vscode-input-background);
-    color: var(--vscode-editor-foreground);
-    border: 1px solid var(--vscode-panel-border);
-    padding: 4px 8px;
-    border-radius: 3px;
-    font-size: 12px;
-    
-    &:focus {
-        outline: none;
-        border-color: var(--vscode-focusBorder);
-    }
-`;
 
 const ToolMeta = styled.span`
     color: var(--vscode-descriptionForeground);
@@ -285,10 +241,10 @@ function extractInputSchema(spec: any, method: string, operationPath: string): o
     const properties: Record<string, any> = {};
     const required: string[] = [];
 
-    // Path parameters only
+    // Path and query parameters
     if (Array.isArray(operation.parameters)) {
         for (const param of operation.parameters) {
-            if (param.in === 'path' && param.name && param.schema) {
+            if ((param.in === 'path' || param.in === 'query') && param.name && param.schema) {
                 properties[param.name] = {
                     ...param.schema,
                     ...(param.description ? { description: param.description } : {})
@@ -343,23 +299,6 @@ function generateMCPLocalEntryXml(serverName: string, tools: Tool[], inputSchema
     return mcptoolsFragment;
 }
 
-/**
- * Generate MCP inbound-endpoint XML
- */
-function generateMCPInboundEndpointXml(serverName: string, localEntryName: string): string {
-    const inboundEndpointXml = `<?xml version="1.0" encoding="UTF-8"?>
-<inboundEndpoint name="${serverName}-endpoint" sequence="" onError="" class="org.wso2.carbon.inbound.SSE.McpInboundListener" xmlns="http://ws.apache.org/ns/synapse">
-    <parameters xmlns="http://ws.apache.org/ns/synapse">
-        <parameter name="inbound.mcp.port">8300</parameter>
-        <parameter name="inbound.http.port">8300</parameter>
-        <parameter name="inbound.http.context">/mcp</parameter>
-        <parameter name="mcp.tools.localentry">${localEntryName}</parameter>
-        <parameter name="inbound.behavior">listening</parameter>
-    </parameters>
-</inboundEndpoint>`;
-
-    return inboundEndpointXml;
-}
 
 const artifactParserConfig = {
     apis: {
@@ -398,6 +337,50 @@ const artifactParserConfig = {
         }
     }
 };
+
+async function buildInputSchemas(
+    tools: Tool[],
+    apiDefDir: string,
+    readFile: (filePath: string) => Promise<string | null>
+): Promise<Record<string, object>> {
+    const yamlCache: Record<string, any> = {};
+    const inputSchemas: Record<string, object> = {};
+
+    const readYaml = async (filePath: string): Promise<any> => {
+        if (Object.prototype.hasOwnProperty.call(yamlCache, filePath)) return yamlCache[filePath];
+        try {
+            const content = await readFile(filePath);
+            yamlCache[filePath] = content ? yaml.parse(content) : null;
+        } catch {
+            yamlCache[filePath] = null;
+        }
+        return yamlCache[filePath];
+    };
+
+    for (const tool of tools) {
+        const rawVersion = tool.apiRawVersion || '';
+        const xmlBaseName = tool.apiXmlPath
+            ? pathModule.basename(tool.apiXmlPath, pathModule.extname(tool.apiXmlPath))
+            : tool.apiName;
+
+        const candidates = [
+            ...(rawVersion ? [`${xmlBaseName}_v${rawVersion}.yaml`] : []),
+            `${xmlBaseName}.yaml`,
+        ].map(f => pathModule.join(apiDefDir, f).toString());
+
+        let spec: any = null;
+        for (const candidate of candidates) {
+            spec = await readYaml(candidate);
+            if (spec !== null) break;
+        }
+
+        inputSchemas[tool.id] = spec
+            ? extractInputSchema(spec, tool.operationMethod, tool.operationPath)
+            : { type: 'object', properties: {}, additionalProperties: false };
+    }
+
+    return inputSchemas;
+}
 
 export interface MCPServerFromAPIsFormProps {
     path: string;
@@ -485,7 +468,7 @@ export function MCPServerFromAPIsForm({ path }: MCPServerFromAPIsFormProps) {
 
                 const defaultName = `${operation.method}_${cleanPathForToolName(operation.path)}`;
                 return {
-                    id: `tool-${Date.now()}-${selectedOp.id}`,
+                    id: crypto.randomUUID() as string,
                     name: selectedOp.customName.trim() || defaultName,
                     description: selectedOp.description.trim(),
                     apiId: api.id,
@@ -510,9 +493,6 @@ export function MCPServerFromAPIsForm({ path }: MCPServerFromAPIsFormProps) {
         setTools(tools.filter(t => t.id !== toolId));
     };
 
-    const updateToolName = (toolId: string, newName: string) => {
-        setTools(tools.map(t => t.id === toolId ? { ...t, name: newName } : t));
-    };
 
     const onSubmit = async (data: any) => {
         if (tools.length === 0) {
@@ -535,41 +515,15 @@ export function MCPServerFromAPIsForm({ path }: MCPServerFromAPIsFormProps) {
             const apiDefDir = pathModule.join(
                 projectDir, 'src', 'main', 'wso2mi', 'resources', 'api-definitions'
             ).toString();
-            const yamlCache: Record<string, any> = {};
-            const inputSchemas: Record<string, object> = {};
 
-            const readYaml = async (filePath: string): Promise<any> => {
-                if (yamlCache.hasOwnProperty(filePath)) return yamlCache[filePath];
-                try {
+            const inputSchemas = await buildInputSchemas(
+                tools,
+                apiDefDir,
+                async (filePath) => {
                     const resp = await rpcClient.getMiDiagramRpcClient().readIdpSchemaFileContent({ filePath });
-                    yamlCache[filePath] = resp.fileContent ? yaml.parse(resp.fileContent) : null;
-                } catch {
-                    yamlCache[filePath] = null;
+                    return resp.fileContent ?? null;
                 }
-                return yamlCache[filePath];
-            };
-
-            for (const tool of tools) {
-                const rawVersion = tool.apiRawVersion || '';
-                const xmlBaseName = tool.apiXmlPath
-                    ? pathModule.basename(tool.apiXmlPath, pathModule.extname(tool.apiXmlPath))
-                    : tool.apiName;
-                
-                const candidates = [
-                    ...(rawVersion ? [`${xmlBaseName}_v${rawVersion}.yaml`] : []),
-                    `${xmlBaseName}.yaml`,
-                ].map(f => pathModule.join(apiDefDir, f).toString());
-
-                let spec: any = null;
-                for (const candidate of candidates) {
-                    spec = await readYaml(candidate);
-                    if (spec !== null) break;
-                }
-
-                inputSchemas[tool.id] = spec
-                    ? extractInputSchema(spec, tool.operationMethod, tool.operationPath)
-                    : { type: 'object', properties: {}, additionalProperties: false };
-            }
+            );
 
             // Generate local-entry XML with MCP tools configuration
             const localEntryName = `${data.serverName}-mcp-config`;
@@ -584,8 +538,6 @@ export function MCPServerFromAPIsForm({ path }: MCPServerFromAPIsFormProps) {
                 URL: '',
                 getContentOnly: false
             });
-
-            const inboundEndpointXml = generateMCPInboundEndpointXml(data.serverName, localEntryName);
 
             // Create inbound-endpoint artifact
             await rpcClient.getMiDiagramRpcClient().createInboundEndpoint({
@@ -651,12 +603,12 @@ export function MCPServerFromAPIsForm({ path }: MCPServerFromAPIsFormProps) {
 
                         {/* Add Tool Section */}
                         <FormSection>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <ToolsSectionHeader>
                                 <SectionLabel>Tools ({tools.length})</SectionLabel>
-                                <AddToolMainBtn type="button" onClick={openAddToolDialog}>
+                                <AddToolMainBtn type="button" onClick={openAddToolDialog} aria-label="Add tool">
                                     + Add Tool
                                 </AddToolMainBtn>
-                            </div>
+                            </ToolsSectionHeader>
 
                             {tools.length === 0 ? (
                                 <EmptyMessage>No tools added yet. Click "Add Tool" to create one.</EmptyMessage>
@@ -664,19 +616,26 @@ export function MCPServerFromAPIsForm({ path }: MCPServerFromAPIsFormProps) {
                                 <ToolsList>
                                     {tools.map(tool => (
                                         <ToolItem key={tool.id}>
-                                            <ToolNameInput
-                                                type="text"
-                                                value={tool.name}
-                                                onChange={(e) => updateToolName(tool.id, e.target.value)}
-                                                placeholder="Tool name"
-                                            />
+                                            <ToolInfo>
+                                                <ToolName>{tool.name}</ToolName>
+                                                {(tool.description || tool.operationSummary) && (
+                                                    <ToolDescription>
+                                                        {tool.description || tool.operationSummary}
+                                                    </ToolDescription>
+                                                )}
+                                            </ToolInfo>
                                             <ToolMeta>
                                                 <MethodBadge method={tool.operationMethod} style={{ marginRight: '4px' }}>
                                                     {tool.operationMethod}
                                                 </MethodBadge>
                                                 {tool.operationPath} ({tool.apiName})
                                             </ToolMeta>
-                                            <RemoveBtn onClick={() => removeTool(tool.id)}>✕</RemoveBtn>
+                                            <RemoveBtn
+                                                onClick={() => removeTool(tool.id)}
+                                                aria-label={`Remove tool ${tool.name}`}
+                                            >
+                                                ✕
+                                            </RemoveBtn>
                                         </ToolItem>
                                     ))}
                                 </ToolsList>
