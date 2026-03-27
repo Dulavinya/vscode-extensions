@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import styled from '@emotion/styled';
 import { Button } from '@wso2/ui-toolkit';
 import { MACHINE_VIEW, EVENT_TYPE } from '@wso2/mi-core';
@@ -107,12 +107,48 @@ const StyledButton = styled(Button)`
 
 export interface MCPServerWizardProps {
     path: string;
+    forceCreate?: boolean;
 }
 
-export function MCPServerWizard({ path }: MCPServerWizardProps) {
+export function MCPServerWizard({ path, forceCreate }: MCPServerWizardProps) {
     const { rpcClient } = useVisualizerContext();
     const [loading, setLoading] = useState(false);
+    const [checking, setChecking] = useState(!forceCreate);
 
+    // On mount, redirect to the list if servers already exist (unless forced to create)
+    useEffect(() => {
+        if (forceCreate) return;
+
+        const checkExistingServers = async () => {
+            try {
+                let projectUri = path;
+                const artifactsIndex = projectUri.indexOf('/artifacts');
+                if (artifactsIndex !== -1) {
+                    projectUri = projectUri.substring(0, artifactsIndex).replace(/\/src\/main\/wso2mi$/, '');
+                }
+
+                const projectStructure = await rpcClient.getMiVisualizerRpcClient().getProjectStructure({
+                    documentUri: projectUri
+                });
+
+                const localEntries: any[] = projectStructure?.directoryMap?.src?.main?.wso2mi?.artifacts?.localEntries || [];
+                const hasMCPServers = localEntries.some((e: any) => e.name?.endsWith('-mcp-config'));
+
+                if (hasMCPServers) {
+                    rpcClient.getMiVisualizerRpcClient().openView({
+                        type: EVENT_TYPE.OPEN_VIEW,
+                        location: { view: MACHINE_VIEW.MCPServerList, documentUri: path }
+                    });
+                    return;
+                }
+            } catch {
+                // If check fails, stay on the wizard
+            }
+            setChecking(false);
+        };
+
+        checkExistingServers();
+    }, []);
 
     const handleCreateFromAPIs = async () => {
         setLoading(true);
@@ -137,6 +173,10 @@ export function MCPServerWizard({ path }: MCPServerWizardProps) {
 
     
     const handleCreateBlank = async () => {};
+
+    if (checking) {
+        return null;
+    }
 
     return (
         <View>

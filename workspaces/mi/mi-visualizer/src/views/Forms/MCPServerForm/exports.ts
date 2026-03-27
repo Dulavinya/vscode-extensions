@@ -19,3 +19,4 @@ export { default as MCPServerWizard } from './index';
 export { default as MCPServerFromAPIsForm } from './MCPServerFromAPIsForm';
 export { default as MCPServerFromProxyForm } from './MCPServerFromProxyForm';
 export { default as MCPServerBlankForm } from './MCPServerBlankForm';
+export { default as MCPServerList } from './MCPServerList';

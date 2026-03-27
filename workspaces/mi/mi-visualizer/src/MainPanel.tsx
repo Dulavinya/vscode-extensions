@@ -62,6 +62,7 @@ import { MCPServerWizard } from './views/Forms/MCPServerForm';
 import { MCPServerFromAPIsForm } from './views/Forms/MCPServerForm/MCPServerFromAPIsForm';
 import { MCPServerFromProxyForm } from './views/Forms/MCPServerForm/MCPServerFromProxyForm';
 import { MCPServerBlankForm } from './views/Forms/MCPServerForm/MCPServerBlankForm';
+import { MCPServerList } from './views/Forms/MCPServerForm/MCPServerList';
 import { IdpConnectorSchemaGenerateForm }from './views/Forms/IDPConnectorForm/IdpConnectorSchemaGenerateForm';
 import { KubernetesConfigurationForm } from "./views/Forms/KubernetesConfigurationForm";
 import { RegistryPropertyForm } from "./views/Forms/RegistryPropertyForm";
@@ -340,10 +341,13 @@ const MainPanel = (props: MainPanelProps) => {
                 setViewComponent(<DataSourceWizard path={visualizerState.documentUri} />);
                 break;
             case MACHINE_VIEW.MCPServerForm:
-                setViewComponent(<MCPServerWizard path={visualizerState.documentUri} />);
+                setViewComponent(<MCPServerWizard path={visualizerState.documentUri} forceCreate={visualizerState.customProps?.forceCreate} />);
+                break;
+            case MACHINE_VIEW.MCPServerList:
+                setViewComponent(<MCPServerList path={visualizerState.documentUri} />);
                 break;
             case MACHINE_VIEW.MCPServerFromAPIsForm:
-                setViewComponent(<MCPServerFromAPIsForm path={visualizerState.documentUri} />);
+                setViewComponent(<MCPServerFromAPIsForm path={visualizerState.documentUri} editData={visualizerState.customProps?.editData} />);
                 break;
             case MACHINE_VIEW.MCPServerFromProxyForm:
                 setViewComponent(<MCPServerFromProxyForm path={visualizerState.documentUri} />);

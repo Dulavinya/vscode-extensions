@@ -71,6 +71,7 @@ export enum MACHINE_VIEW {
     MCPServerFromAPIsForm = "MCPServerFromAPIsForm",
     MCPServerFromProxyForm = "MCPServerFromProxyForm",
     MCPServerBlankForm = "MCPServerBlankForm",
+    MCPServerList = "MCPServerList",
     ProjectCreationForm = "Project Creation Form",
     ImportProjectForm = "Import Project Form",
     LocalEntryForm = "Local Entry Form",

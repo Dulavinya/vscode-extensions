@@ -382,19 +382,41 @@ async function buildInputSchemas(
     return inputSchemas;
 }
 
-export interface MCPServerFromAPIsFormProps {
-    path: string;
+export interface EditToolData {
+    id: string;
+    name: string;
+    description: string;
+    apiId: string;
+    apiName: string;
+    apiVersion: string;
+    apiRawVersion: string;
+    apiXmlPath: string;
+    operationId: string;
+    operationMethod: string;
+    operationPath: string;
+    operationSummary: string;
 }
 
-export function MCPServerFromAPIsForm({ path }: MCPServerFromAPIsFormProps) {
+export interface MCPServerEditData {
+    serverName: string;
+    tools: EditToolData[];
+}
+
+export interface MCPServerFromAPIsFormProps {
+    path: string;
+    editData?: MCPServerEditData;
+}
+
+export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormProps) {
+    const isEditMode = !!editData;
     const { rpcClient } = useVisualizerContext();
     const { register, handleSubmit, formState: { errors } } = useForm({
         resolver: yupResolver(schema),
-        defaultValues: { serverName: '' }
+        defaultValues: { serverName: editData?.serverName ?? '' }
     });
 
     const [apis, setApis] = useState<API[]>([]);
-    const [tools, setTools] = useState<Tool[]>([]);
+    const [tools, setTools] = useState<Tool[]>(editData?.tools ?? []);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -557,23 +579,24 @@ export function MCPServerFromAPIsForm({ path }: MCPServerFromAPIsFormProps) {
                 }
             });
 
-            // Show success notification
-            await rpcClient.getMiVisualizerRpcClient().showNotification({
-                message: `MCP Server "${data.serverName}" created successfully with ${tools.length} tool(s)`,
+            rpcClient.getMiVisualizerRpcClient().showNotification({
+                message: isEditMode
+                    ? `MCP Server "${data.serverName}" updated successfully`
+                    : `MCP Server "${data.serverName}" created successfully with ${tools.length} tool(s)`,
                 type: 'info'
-            });
-
-            // Navigate back to overview
-            rpcClient.getMiVisualizerRpcClient().openView({
-                type: EVENT_TYPE.OPEN_VIEW,
-                location: { view: MACHINE_VIEW.Overview }
             });
         } catch (err) {
             console.error('Error creating MCP Server:', err);
             setError(`Failed to create MCP Server: ${err instanceof Error ? err.message : String(err)}`);
+            return;
         } finally {
             setSubmitting(false);
         }
+
+        rpcClient.getMiVisualizerRpcClient().openView({
+            type: EVENT_TYPE.OPEN_VIEW,
+            location: { view: MACHINE_VIEW.MCPServerList, documentUri: path }
+        });
     };
 
     return (
@@ -595,6 +618,7 @@ export function MCPServerFromAPIsForm({ path }: MCPServerFromAPIsFormProps) {
                             <TextField
                                 placeholder="e.g., my-mcp-server"
                                 {...register('serverName')}
+                                disabled={isEditMode}
                             />
                             {errors.serverName && (
                                 <ErrorMessage>{String(errors.serverName?.message)}</ErrorMessage>
@@ -651,7 +675,7 @@ export function MCPServerFromAPIsForm({ path }: MCPServerFromAPIsFormProps) {
                                 onClick={() => {
                                     rpcClient.getMiVisualizerRpcClient().openView({
                                         type: EVENT_TYPE.OPEN_VIEW,
-                                        location: { view: 'MCPServerForm' as any, documentUri: path }
+                                        location: { view: MACHINE_VIEW.MCPServerList, documentUri: path }
                                     });
                                 }}
                             >
@@ -662,7 +686,12 @@ export function MCPServerFromAPIsForm({ path }: MCPServerFromAPIsFormProps) {
                                 disabled={submitting || loading || tools.length === 0}
                                 onClick={handleSubmit(onSubmit)}
                             >
-                                {submitting ? 'Creating...' : `Create MCP Server (${tools.length} tool${tools.length !== 1 ? 's' : ''})`}
+                                {submitting
+                                    ? (isEditMode ? 'Updating...' : 'Creating...')
+                                    : isEditMode
+                                        ? `Update MCP Server (${tools.length} tool${tools.length !== 1 ? 's' : ''})`
+                                        : `Create MCP Server (${tools.length} tool${tools.length !== 1 ? 's' : ''})`
+                                }
                             </Button>
                         </ButtonGroup>
                     </form>
