@@ -218,6 +218,10 @@ const schema = yup.object({
         .required('Server name is required')
         .min(3, 'Server name must be at least 3 characters')
         .matches(/^[a-zA-Z0-9_-]+$/, 'Server name can only contain letters, numbers, hyphens, and underscores'),
+    port: yup.number()
+        .typeError('Port must be a number')
+        .required('Port is required')
+        .integer('Port must be an integer'),
 });
 
 function cleanPathForToolName(path: string): string {
@@ -412,7 +416,7 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
     const { rpcClient } = useVisualizerContext();
     const { register, handleSubmit, formState: { errors } } = useForm({
         resolver: yupResolver(schema),
-        defaultValues: { serverName: editData?.serverName ?? '' }
+        defaultValues: { serverName: editData?.serverName ?? '', port: 8300 }
     });
 
     const [apis, setApis] = useState<API[]>([]);
@@ -571,8 +575,8 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
                     class: 'org.wso2.carbon.inbound.SSE.McpInboundListener'
                 },
                 parameters: {
-                    'inbound.mcp.port': 8300,
-                    'inbound.http.port': 8300,
+                    'inbound.mcp.port': data.port,
+                    'inbound.http.port': data.port,
                     'inbound.http.context': '/mcp',
                     'mcp.tools.localentry': localEntryName,
                     'inbound.behavior': 'listening'
@@ -622,6 +626,18 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
                             />
                             {errors.serverName && (
                                 <ErrorMessage>{String(errors.serverName?.message)}</ErrorMessage>
+                            )}
+                        </FormSection>
+
+                        {/* Port */}
+                        <FormSection>
+                            <SectionLabel>Port</SectionLabel>
+                            <TextField
+                                placeholder="e.g., 8300"
+                                {...register('port')}
+                            />
+                            {errors.port && (
+                                <ErrorMessage>{String(errors.port?.message)}</ErrorMessage>
                             )}
                         </FormSection>
 
