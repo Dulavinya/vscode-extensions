@@ -52,7 +52,7 @@ function getDefaultName(operation: APIOperation): string {
     return `${operation.method}_${cleanPath}`;
 }
 
-// --- Styled components ---
+// Styled components
 
 const DialogOverlay = styled.div`
     position: fixed;

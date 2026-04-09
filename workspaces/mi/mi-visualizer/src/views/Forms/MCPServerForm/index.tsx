@@ -169,10 +169,22 @@ export function MCPServerWizard({ path, forceCreate }: MCPServerWizardProps) {
     };
 
     
-    const handleCreateFromProxy = async () => {};
-
-    
-    const handleCreateBlank = async () => {};
+    const handleCreateFromSequences = async () => {
+        setLoading(true);
+        try {
+            rpcClient.getMiVisualizerRpcClient().openView({
+                type: EVENT_TYPE.OPEN_VIEW,
+                location: {
+                    view: MACHINE_VIEW.MCPServerFromSequencesForm,
+                    documentUri: path
+                }
+            });
+        } catch (error) {
+            console.error('Error navigating to Sequences form:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     if (checking) {
         return null;
@@ -204,32 +216,14 @@ export function MCPServerWizard({ path, forceCreate }: MCPServerWizardProps) {
                             </StyledButton>
                         </OptionCard>
 
-                        {/* Option 2: Create from Proxy Service */}
-                        <OptionCard onClick={handleCreateFromProxy}>
-                            {/* <OptionIcon className="codicon codicon-plug" /> */}
-
-
-                            <OptionTitle>From Proxy Service</OptionTitle>
+                        {/* Option 2: Create from Existing Sequences */}
+                        <OptionCard onClick={handleCreateFromSequences}>
+                            <OptionTitle>From Existing Sequences</OptionTitle>
                             <OptionDescription>
-                                Create an MCP server configuration based on an existing proxy service.
-                                
+                                Generate an MCP server configuration by selecting existing sequences in your project.
                             </OptionDescription>
                             <StyledButton appearance="primary" disabled={loading}>
-                                {loading ? 'Loading...' : 'Select Proxy'}
-                            </StyledButton>
-                        </OptionCard>
-
-                        {/* Option 3: Create Blank MCP Server */}
-                        <OptionCard onClick={handleCreateBlank}>
-                            {/* <OptionIcon className="codicon codicon-file-code" /> */}
-
-
-                            <OptionTitle>Blank MCP Server</OptionTitle>
-                            <OptionDescription>
-                                Start with a blank template.
-                            </OptionDescription>
-                            <StyledButton appearance="primary" disabled={loading}>
-                                {loading ? 'Loading...' : 'Create Blank'}
+                                {loading ? 'Loading...' : 'Select Sequences'}
                             </StyledButton>
                         </OptionCard>
                     </OptionsContainer>

@@ -62,6 +62,7 @@ import { MCPServerWizard } from './views/Forms/MCPServerForm';
 import { MCPServerFromAPIsForm } from './views/Forms/MCPServerForm/MCPServerFromAPIsForm';
 import { MCPServerFromProxyForm } from './views/Forms/MCPServerForm/MCPServerFromProxyForm';
 import { MCPServerBlankForm } from './views/Forms/MCPServerForm/MCPServerBlankForm';
+import { MCPServerFromSequencesForm } from './views/Forms/MCPServerForm/MCPServerFromSequencesForm';
 import { MCPServerList } from './views/Forms/MCPServerForm/MCPServerList';
 import { IdpConnectorSchemaGenerateForm }from './views/Forms/IDPConnectorForm/IdpConnectorSchemaGenerateForm';
 import { KubernetesConfigurationForm } from "./views/Forms/KubernetesConfigurationForm";
@@ -351,6 +352,9 @@ const MainPanel = (props: MainPanelProps) => {
                 break;
             case MACHINE_VIEW.MCPServerFromProxyForm:
                 setViewComponent(<MCPServerFromProxyForm path={visualizerState.documentUri} />);
+                break;
+            case MACHINE_VIEW.MCPServerFromSequencesForm:
+                setViewComponent(<MCPServerFromSequencesForm path={visualizerState.documentUri} />);
                 break;
             case MACHINE_VIEW.MCPServerBlankForm:
                 setViewComponent(<MCPServerBlankForm path={visualizerState.documentUri} />);
