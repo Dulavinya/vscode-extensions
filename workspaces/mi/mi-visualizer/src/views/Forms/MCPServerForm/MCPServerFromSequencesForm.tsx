@@ -27,8 +27,7 @@ import { EVENT_TYPE, MACHINE_VIEW } from '@wso2/mi-core';
 import { View, ViewContent, ViewHeader } from '../../../components/View';
 import * as pathModule from 'path';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
+//  Types 
 interface Sequence {
     id: string;
     name: string;
@@ -43,7 +42,7 @@ interface SequenceTool {
     sequenceXmlPath: string;
 }
 
-// ─── Styled Components ────────────────────────────────────────────────────────
+//  Styled Components 
 
 const Container = styled.div`
     display: flex;
@@ -179,7 +178,7 @@ const AddToolMainBtn = styled.button`
     }
 `;
 
-// ─── Dialog Styled Components ─────────────────────────────────────────────────
+//  Dialog Styled Components 
 
 const DialogOverlay = styled.div`
     position: fixed;
@@ -342,8 +341,7 @@ const DialogAddBtn = styled(DialogBtn)`
     &:disabled { opacity: 0.6; cursor: not-allowed; }
 `;
 
-// ─── Add Sequence Tool Dialog ─────────────────────────────────────────────────
-
+//  Add Sequence Tool Dialog 
 interface AddSequenceToolDialogProps {
     isOpen: boolean;
     sequences: Sequence[];
@@ -466,8 +464,7 @@ function AddSequenceToolDialog({ isOpen, sequences, onConfirm, onCancel }: AddSe
     );
 }
 
-// ─── XML Generation ───────────────────────────────────────────────────────────
-
+// XML Generation 
 function generateMCPLocalEntryXml(serverName: string, tools: SequenceTool[]): string {
     const emptyInputSchema = JSON.stringify({ type: 'object', properties: {}, additionalProperties: false });
 
@@ -486,7 +483,7 @@ function generateMCPLocalEntryXml(serverName: string, tools: SequenceTool[]): st
         </mcptools>`;
 }
 
-// ─── Form Schema ──────────────────────────────────────────────────────────────
+//  Form Schema 
 
 const formSchema = yup.object({
     serverName: yup.string()
@@ -495,7 +492,7 @@ const formSchema = yup.object({
         .matches(/^[a-zA-Z0-9_-]+$/, 'Server name can only contain letters, numbers, hyphens, and underscores'),
 });
 
-// ─── Main Form ────────────────────────────────────────────────────────────────
+//  Main Form 
 
 export interface MCPServerFromSequencesFormProps {
     path: string;

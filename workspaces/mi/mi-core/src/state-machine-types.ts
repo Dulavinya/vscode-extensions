@@ -69,8 +69,6 @@ export enum MACHINE_VIEW {
     DSSQueryServiceDesigner = "DSS Query Designer",
     MCPServerForm = "MCPServerForm",
     MCPServerFromAPIsForm = "MCPServerFromAPIsForm",
-    MCPServerFromProxyForm = "MCPServerFromProxyForm",
-    MCPServerBlankForm = "MCPServerBlankForm",
     MCPServerFromSequencesForm = "MCPServerFromSequencesForm",
     MCPServerList = "MCPServerList",
     ProjectCreationForm = "Project Creation Form",

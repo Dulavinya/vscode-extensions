@@ -45,7 +45,7 @@ interface MCPServer {
     tools: Tool[];
 }
 
-// --- Styled Components ---
+//  Styled Components 
 
 const Container = styled.div`
     display: flex;
@@ -198,7 +198,7 @@ const ErrorMessage = styled.div`
     font-size: 12px;
 `;
 
-// --- Helpers ---
+//  Helpers 
 
 function parseToolsFromLocalEntry(xmlContent: string): Tool[] {
     try {
@@ -233,7 +233,7 @@ function parseToolsFromLocalEntry(xmlContent: string): Tool[] {
     }
 }
 
-// --- Component ---
+//  Component 
 
 export interface MCPServerListProps {
     path: string;
@@ -280,9 +280,7 @@ export function MCPServerList({ path }: MCPServerListProps) {
                         if (resp.fileContent) {
                             tools = parseToolsFromLocalEntry(resp.fileContent);
                         }
-                    } catch {
-                        // If reading fails, continue with empty tools
-                    }
+                    } catch {}
                 }
 
                 loadedServers.push({
