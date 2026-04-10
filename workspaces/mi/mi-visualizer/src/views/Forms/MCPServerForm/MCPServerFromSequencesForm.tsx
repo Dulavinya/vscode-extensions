@@ -40,6 +40,7 @@ interface SequenceTool {
     description: string;
     sequenceName: string;
     sequenceXmlPath: string;
+    inputSchema: string;
 }
 
 //  Styled Components 
@@ -345,14 +346,58 @@ const DialogAddBtn = styled(DialogBtn)`
 interface AddSequenceToolDialogProps {
     isOpen: boolean;
     sequences: Sequence[];
-    onConfirm: (selected: Array<{ sequenceId: string; customName: string; description: string }>) => void;
+    onConfirm: (selected: Array<{ sequenceId: string; customName: string; description: string; inputSchema: string }>) => void;
     onCancel: () => void;
 }
+
+const SchemaRow = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 8px;
+`;
+
+const SchemaTextarea = styled.textarea`
+    width: 100%;
+    min-height: 80px;
+    padding: 6px 8px;
+    font-size: 12px;
+    font-family: var(--vscode-editor-font-family, monospace);
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+    border-radius: 3px;
+    resize: vertical;
+    box-sizing: border-box;
+    &:focus {
+        outline: none;
+        border-color: var(--vscode-focusBorder);
+    }
+`;
+
+const SchemaImportBtn = styled.button`
+    padding: 4px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+    border: 1px solid var(--vscode-button-secondaryBackground);
+    border-radius: 3px;
+    cursor: pointer;
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    &:hover { background: var(--vscode-button-secondaryHoverBackground); }
+`;
+
+const SchemaError = styled.span`
+    color: var(--vscode-inputValidation-errorForeground, var(--vscode-errorForeground));
+    font-size: 11px;
+`;
 
 function AddSequenceToolDialog({ isOpen, sequences, onConfirm, onCancel }: AddSequenceToolDialogProps) {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [customNames, setCustomNames] = useState<Record<string, string>>({});
     const [customDescriptions, setCustomDescriptions] = useState<Record<string, string>>({});
+    const [inputSchemas, setInputSchemas] = useState<Record<string, string>>({});
+    const [schemaErrors, setSchemaErrors] = useState<Record<string, string>>({});
+    const fileInputRefs = React.useRef<Record<string, HTMLInputElement | null>>({});
 
     if (!isOpen) return null;
 
@@ -370,20 +415,64 @@ function AddSequenceToolDialog({ isOpen, sequences, onConfirm, onCancel }: AddSe
         }
     };
 
+    const validateSchema = (id: string, value: string): boolean => {
+        if (!value.trim()) {
+            setSchemaErrors(prev => { const n = { ...prev }; delete n[id]; return n; });
+            return true;
+        }
+        try {
+            JSON.parse(value);
+            setSchemaErrors(prev => { const n = { ...prev }; delete n[id]; return n; });
+            return true;
+        } catch {
+            setSchemaErrors(prev => ({ ...prev, [id]: 'Invalid JSON' }));
+            return false;
+        }
+    };
+
+    const handleSchemaChange = (id: string, value: string) => {
+        setInputSchemas(prev => ({ ...prev, [id]: value }));
+        validateSchema(id, value);
+    };
+
+    const handleImportFile = (id: string) => {
+        fileInputRefs.current[id]?.click();
+    };
+
+    const handleFileChange = (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const content = event.target?.result as string;
+            setInputSchemas(prev => ({ ...prev, [id]: content }));
+            validateSchema(id, content);
+        };
+        reader.readAsText(file);
+        e.target.value = '';
+    };
+
     const handleConfirm = () => {
         if (selectedIds.size === 0) return;
+        const hasErrors = Array.from(selectedIds).some(id => schemaErrors[id]);
+        if (hasErrors) return;
+        const emptySchema = JSON.stringify({ type: 'object', properties: {}, additionalProperties: false });
         const selected = Array.from(selectedIds).map(id => ({
             sequenceId: id,
             customName: customNames[id]?.trim() || id,
             description: customDescriptions[id]?.trim() || '',
+            inputSchema: inputSchemas[id]?.trim() || emptySchema,
         }));
         onConfirm(selected);
         setSelectedIds(new Set());
         setCustomNames({});
         setCustomDescriptions({});
+        setInputSchemas({});
+        setSchemaErrors({});
     };
 
     const allSelected = sequences.length > 0 && selectedIds.size === sequences.length;
+    const hasSchemaErrors = Array.from(selectedIds).some(id => schemaErrors[id]);
 
     return (
         <DialogOverlay onClick={onCancel}>
@@ -440,6 +529,31 @@ function AddSequenceToolDialog({ isOpen, sequences, onConfirm, onCancel }: AddSe
                                                 onChange={e => setCustomDescriptions(prev => ({ ...prev, [seq.id]: e.target.value }))}
                                                 onClick={e => e.stopPropagation()}
                                             />
+                                            <InputFieldLabel>Input Schema (JSON)</InputFieldLabel>
+                                            <SchemaRow>
+                                                <SchemaTextarea
+                                                    placeholder='e.g. {"type":"object","properties":{"param":{"type":"string"}}}'
+                                                    value={inputSchemas[seq.id] || ''}
+                                                    onChange={e => handleSchemaChange(seq.id, e.target.value)}
+                                                    onClick={e => e.stopPropagation()}
+                                                />
+                                                <SchemaImportBtn
+                                                    type="button"
+                                                    onClick={e => { e.stopPropagation(); handleImportFile(seq.id); }}
+                                                >
+                                                    Import JSON
+                                                </SchemaImportBtn>
+                                                <input
+                                                    ref={el => { fileInputRefs.current[seq.id] = el; }}
+                                                    type="file"
+                                                    accept=".json"
+                                                    style={{ display: 'none' }}
+                                                    onChange={e => handleFileChange(seq.id, e)}
+                                                />
+                                            </SchemaRow>
+                                            {schemaErrors[seq.id] && (
+                                                <SchemaError>{schemaErrors[seq.id]}</SchemaError>
+                                            )}
                                         </CustomInputsContainer>
                                     )}
                                 </SequenceItem>
@@ -455,7 +569,7 @@ function AddSequenceToolDialog({ isOpen, sequences, onConfirm, onCancel }: AddSe
                             {selectedIds.size} sequence{selectedIds.size !== 1 ? 's' : ''} selected
                         </SelectionInfo>
                     )}
-                    <DialogAddBtn onClick={handleConfirm} disabled={selectedIds.size === 0}>
+                    <DialogAddBtn onClick={handleConfirm} disabled={selectedIds.size === 0 || hasSchemaErrors}>
                         Add Selected Tools ({selectedIds.size})
                     </DialogAddBtn>
                 </DialogButtonGroup>
@@ -466,15 +580,13 @@ function AddSequenceToolDialog({ isOpen, sequences, onConfirm, onCancel }: AddSe
 
 // XML Generation 
 function generateMCPLocalEntryXml(serverName: string, tools: SequenceTool[]): string {
-    const emptyInputSchema = JSON.stringify({ type: 'object', properties: {}, additionalProperties: false });
-
     let toolsXml = '';
     tools.forEach(tool => {
         toolsXml += `
             <tool name="${tool.name}">
                 <sequence>${tool.sequenceName}</sequence>
                 <description>${tool.description || tool.sequenceName}</description>
-                <inputSchema>${emptyInputSchema}</inputSchema>
+                <inputSchema>${tool.inputSchema}</inputSchema>
             </tool>`;
     });
 
@@ -556,7 +668,7 @@ export function MCPServerFromSequencesForm({ path }: MCPServerFromSequencesFormP
         loadSequences();
     }, [rpcClient, path]);
 
-    const handleDialogConfirm = (selected: Array<{ sequenceId: string; customName: string; description: string }>) => {
+    const handleDialogConfirm = (selected: Array<{ sequenceId: string; customName: string; description: string; inputSchema: string }>) => {
         const newTools: SequenceTool[] = selected
             .filter(s => !tools.some(t => t.sequenceName === s.sequenceId)) // avoid duplicates
             .map(s => ({
@@ -565,6 +677,7 @@ export function MCPServerFromSequencesForm({ path }: MCPServerFromSequencesFormP
                 description: s.description,
                 sequenceName: s.sequenceId,
                 sequenceXmlPath: sequences.find(seq => seq.id === s.sequenceId)?.xmlPath || '',
+                inputSchema: s.inputSchema,
             }));
         setTools(prev => [...prev, ...newTools]);
         setShowDialog(false);
