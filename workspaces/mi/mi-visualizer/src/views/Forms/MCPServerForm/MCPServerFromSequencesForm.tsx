@@ -391,6 +391,22 @@ const SchemaError = styled.span`
     font-size: 11px;
 `;
 
+// Converts shorthand { "field": string } or full JSON Schema to a JSON Schema string.
+// Returns null if the input cannot be parsed.
+function convertToJsonSchema(input: string): string | null {
+    if (!input.trim()) return null;
+    try {
+        const sanitized = input.replace(/:\s*(string|number|integer|boolean|array|object|null)\b/g, ': "$1"');
+        const parsed = JSON.parse(sanitized);
+        if (parsed.type || parsed.properties) return JSON.stringify(parsed);
+        const properties: Record<string, { type: string }> = {};
+        for (const [k, v] of Object.entries(parsed)) properties[k] = { type: v as string };
+        return JSON.stringify({ type: 'object', properties, additionalProperties: false });
+    } catch {
+        return null;
+    }
+}
+
 function AddSequenceToolDialog({ isOpen, sequences, onConfirm, onCancel }: AddSequenceToolDialogProps) {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [customNames, setCustomNames] = useState<Record<string, string>>({});
@@ -420,14 +436,12 @@ function AddSequenceToolDialog({ isOpen, sequences, onConfirm, onCancel }: AddSe
             setSchemaErrors(prev => { const n = { ...prev }; delete n[id]; return n; });
             return true;
         }
-        try {
-            JSON.parse(value);
-            setSchemaErrors(prev => { const n = { ...prev }; delete n[id]; return n; });
-            return true;
-        } catch {
-            setSchemaErrors(prev => ({ ...prev, [id]: 'Invalid JSON' }));
+        if (convertToJsonSchema(value) === null) {
+            setSchemaErrors(prev => ({ ...prev, [id]: 'Invalid JSON. Use shorthand like {"amount": number, "name": string} or full JSON Schema.' }));
             return false;
         }
+        setSchemaErrors(prev => { const n = { ...prev }; delete n[id]; return n; });
+        return true;
     };
 
     const handleSchemaChange = (id: string, value: string) => {
@@ -457,12 +471,15 @@ function AddSequenceToolDialog({ isOpen, sequences, onConfirm, onCancel }: AddSe
         const hasErrors = Array.from(selectedIds).some(id => schemaErrors[id]);
         if (hasErrors) return;
         const emptySchema = JSON.stringify({ type: 'object', properties: {}, additionalProperties: false });
-        const selected = Array.from(selectedIds).map(id => ({
-            sequenceId: id,
-            customName: customNames[id]?.trim() || id,
-            description: customDescriptions[id]?.trim() || '',
-            inputSchema: inputSchemas[id]?.trim() || emptySchema,
-        }));
+        const selected = Array.from(selectedIds).map(id => {
+            const raw = inputSchemas[id]?.trim() || '';
+            return {
+                sequenceId: id,
+                customName: customNames[id]?.trim() || id,
+                description: customDescriptions[id]?.trim() || '',
+                inputSchema: (raw ? convertToJsonSchema(raw) : null) || emptySchema,
+            };
+        });
         onConfirm(selected);
         setSelectedIds(new Set());
         setCustomNames({});
@@ -532,7 +549,7 @@ function AddSequenceToolDialog({ isOpen, sequences, onConfirm, onCancel }: AddSe
                                             <InputFieldLabel>Input Schema (JSON)</InputFieldLabel>
                                             <SchemaRow>
                                                 <SchemaTextarea
-                                                    placeholder='e.g. {"type":"object","properties":{"param":{"type":"string"}}}'
+                                                    placeholder='e.g. {"amount": number, "name": string}'
                                                     value={inputSchemas[seq.id] || ''}
                                                     onChange={e => handleSchemaChange(seq.id, e.target.value)}
                                                     onClick={e => e.stopPropagation()}
