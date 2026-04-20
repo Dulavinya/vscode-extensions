@@ -41,6 +41,7 @@ interface Tool {
 interface MCPServer {
     name: string;
     localEntryPath: string;
+    inboundEndpointPath: string;
     toolCount: number;
     tools: Tool[];
 }
@@ -283,9 +284,15 @@ export function MCPServerList({ path }: MCPServerListProps) {
                     } catch {}
                 }
 
+                const localEntryPath = entry.path || '';
+                const inboundEndpointPath = localEntryPath
+                    .replace('/local-entries/', '/inbound-endpoints/')
+                    .replace('-mcp-config.xml', '-endpoint.xml');
+
                 loadedServers.push({
                     name: serverName,
-                    localEntryPath: entry.path || '',
+                    localEntryPath,
+                    inboundEndpointPath,
                     toolCount: tools.length,
                     tools,
                 });
@@ -331,6 +338,7 @@ export function MCPServerList({ path }: MCPServerListProps) {
         e.stopPropagation();
         try {
             rpcClient.getMiDiagramRpcClient().deleteArtifact({ path: server.localEntryPath });
+            rpcClient.getMiDiagramRpcClient().deleteArtifact({ path: server.inboundEndpointPath });
             setServers(prev => prev.filter(s => s.name !== server.name));
         } catch (err) {
             setError(`Failed to delete MCP server: ${err instanceof Error ? err.message : String(err)}`);
