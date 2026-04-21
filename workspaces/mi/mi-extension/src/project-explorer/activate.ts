@@ -205,7 +205,43 @@ export async function activateProjectExplorer(treeviewId: string, context: Exten
 
 	commands.registerCommand(COMMANDS.ADD_MCP_SERVER_COMMAND, (entry: ProjectExplorerEntry) => {
 		openView(EVENT_TYPE.OPEN_VIEW, { view: MACHINE_VIEW.MCPServerForm, documentUri: entry.info?.path });
-		console.log('Add MCP Server');
+	});
+
+	commands.registerCommand(COMMANDS.SHOW_MCP_SERVER_COMMAND, (_fileUri: vscode.Uri, serverName: string) => {
+		const localEntryPath = _fileUri.fsPath;
+		openView(EVENT_TYPE.OPEN_VIEW, {
+			view: MACHINE_VIEW.MCPServerFromAPIsForm,
+			documentUri: localEntryPath,
+			customProps: { editData: { serverName, localEntryPath } },
+		});
+	});
+
+	commands.registerCommand(COMMANDS.DELETE_MCP_SERVER_COMMAND, async (item: vscode.TreeItem) => {
+		const fileUri: vscode.Uri = (item.command?.arguments?.[0]) || (item as any)?.info?.path;
+		if (!fileUri) {
+			window.showErrorMessage('MCP Server not found.');
+			return;
+		}
+		const confirmation = await window.showWarningMessage(
+			`Are you sure you want to delete MCP Server - ${item.label}?`,
+			{ modal: true },
+			'Yes'
+		);
+		if (confirmation !== 'Yes') return;
+		try {
+			const localEntryPath = fileUri.fsPath;
+			const inboundPath = localEntryPath
+				.replace(/[/\\]local-entries[/\\]/, (sep) => sep.replace('local-entries', 'inbound-endpoints'))
+				.replace(/-mcp-config\.xml$/, '-endpoint.xml')
+				.replace(/-mcp-config$/, '-endpoint.xml');
+			await vscode.workspace.fs.delete(vscode.Uri.file(localEntryPath), { useTrash: true });
+			try {
+				await vscode.workspace.fs.delete(vscode.Uri.file(inboundPath), { useTrash: true });
+			} catch {}
+			window.showInformationMessage(`MCP Server ${item.label} has been deleted.`);
+		} catch (error) {
+			window.showErrorMessage(`Failed to delete MCP Server ${item.label}: ${error}`);
+		}
 	});
 	
 	commands.registerCommand(COMMANDS.REVEAL_ITEM_COMMAND, async (viewLocation: VisualizerLocation) => {

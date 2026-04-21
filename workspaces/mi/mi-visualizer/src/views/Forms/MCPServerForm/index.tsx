@@ -16,179 +16,148 @@
  * under the License.
  */
 
-import React, { useEffect, useState } from 'react';
+import { useState } from 'react';
 import styled from '@emotion/styled';
-import { Button } from '@wso2/ui-toolkit';
+import { TextField, Button } from '@wso2/ui-toolkit';
+import { useForm } from 'react-hook-form';
+import * as yup from 'yup';
+import { yupResolver } from '@hookform/resolvers/yup';
 import { MACHINE_VIEW, EVENT_TYPE } from '@wso2/mi-core';
 import { useVisualizerContext } from '@wso2/mi-rpc-client';
 import { View, ViewContent, ViewHeader } from '../../../components/View';
+import * as pathModule from 'path';
 
-// Styled components
 const Container = styled.div`
     display: flex;
     flex-direction: column;
-    gap: 28px;
+    gap: 20px;
     flex: 1;
-    padding-top: 16px;
+    max-width: 600px;
 `;
 
 const Title = styled.h2`
     color: var(--vscode-editor-foreground);
-    margin: 0 0 30px 0;
-    font-size: 24px;
+    margin: 0 0 8px 0;
+    font-size: 20px;
     font-weight: 600;
 `;
 
 const Description = styled.p`
     color: var(--vscode-descriptionForeground);
     margin: 0 0 20px 0;
-    font-size: 14px;
-    line-height: 1.6;
+    font-size: 13px;
+    line-height: 1.5;
 `;
 
-const OptionsContainer = styled.div`
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 20px;
-    max-width: 900px;
-    margin: 0 auto;
-    flex: 1;
-`;
-
-const OptionCard = styled.div`
+const FormSection = styled.div`
     display: flex;
     flex-direction: column;
-    gap: 15px;
-    padding: 20px;
-    min-height: 260px; 
-    max-height: 300px; 
-    border: 1px solid var(--vscode-panel-border);
-    border-radius: 8px;
-    background: var(--vscode-editor-background);
-    cursor: pointer;
-    transition: all 0.3s ease;
-
-    &:hover {
-        border-color: var(--vscode-focusBorder);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        background: var(--vscode-panel-background);
-        transform: translateY(-2px);
-    }
+    gap: 8px;
+    margin-bottom: 16px;
 `;
 
-const OptionIcon = styled.span`
-    font-size: 28px;
+const SectionLabel = styled.label`
     color: var(--vscode-editor-foreground);
-    opacity: 0.9;
+    font-weight: 500;
+    font-size: 14px;
+    display: block;
 `;
 
-
-const OptionTitle = styled.h3`
-    color: var(--vscode-editor-foreground);
-    margin: 0;
-    font-size: 16px;
-    font-weight: 600;
+const ErrorMessage = styled.div`
+    color: var(--vscode-inputValidation-errorBorder);
+    padding: 10px;
+    border: 1px solid var(--vscode-inputValidation-errorBorder);
+    border-radius: 4px;
+    background: var(--vscode-inputValidation-errorBackground);
+    font-size: 12px;
 `;
 
-const OptionDescription = styled.p`
-    color: var(--vscode-descriptionForeground);
-    margin: 0;
-    font-size: 13px;
-    max-width: 90%; 
-    line-height: 1.5;
-    flex: 1;
+const ButtonGroup = styled.div`
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 8px;
 `;
 
-const StyledButton = styled(Button)`
-    width: fit-content;
-    align-self: flex-start;
-    margin-top: auto;
-`;
+const schema = yup.object({
+    serverName: yup.string()
+        .required('Server name is required')
+        .min(3, 'Server name must be at least 3 characters')
+        .matches(/^[a-zA-Z0-9_-]+$/, 'Server name can only contain letters, numbers, hyphens, and underscores'),
+    port: yup.number()
+        .typeError('Port must be a number')
+        .required('Port is required')
+        .integer('Port must be an integer'),
+});
 
 export interface MCPServerWizardProps {
     path: string;
     forceCreate?: boolean;
 }
 
-export function MCPServerWizard({ path, forceCreate }: MCPServerWizardProps) {
+export function MCPServerWizard({ path }: MCPServerWizardProps) {
     const { rpcClient } = useVisualizerContext();
-    const [loading, setLoading] = useState(false);
-    const [checking, setChecking] = useState(!forceCreate);
+    const { register, handleSubmit, formState: { errors } } = useForm({
+        resolver: yupResolver(schema),
+        defaultValues: { serverName: '', port: 8300 },
+    });
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-    // On mount, redirect to the list if servers already exist (unless forced to create)
-    useEffect(() => {
-        if (forceCreate) return;
-
-        const checkExistingServers = async () => {
-            try {
-                let projectUri = path;
-                const artifactsIndex = projectUri.indexOf('/artifacts');
-                if (artifactsIndex !== -1) {
-                    projectUri = projectUri.substring(0, artifactsIndex).replace(/\/src\/main\/wso2mi$/, '');
-                }
-
-                const projectStructure = await rpcClient.getMiVisualizerRpcClient().getProjectStructure({
-                    documentUri: projectUri
-                });
-
-                const localEntries: any[] = projectStructure?.directoryMap?.src?.main?.wso2mi?.artifacts?.localEntries || [];
-                const hasMCPServers = localEntries.some((e: any) => e.name?.endsWith('-mcp-config'));
-
-                if (hasMCPServers) {
-                    rpcClient.getMiVisualizerRpcClient().openView({
-                        type: EVENT_TYPE.OPEN_VIEW,
-                        location: { view: MACHINE_VIEW.MCPServerList, documentUri: path }
-                    });
-                    return;
-                }
-            } catch {
-                // If check fails, stay on the wizard
-            }
-            setChecking(false);
-        };
-
-        checkExistingServers();
-    }, []);
-
-    const handleCreateFromAPIs = async () => {
-        setLoading(true);
+    const onSubmit = async (data: any) => {
+        setSubmitting(true);
+        setError(null);
         try {
-            //navigation to the MCPServerFromAPIs Form view
+            const projectRootResp = await rpcClient.getMiDiagramRpcClient().getProjectRoot({ path });
+            const projectDir = projectRootResp.path;
+
+            const localEntriesDir = pathModule.join(projectDir, 'src', 'main', 'wso2mi', 'artifacts', 'local-entries').toString();
+            const inboundEndpointsDir = pathModule.join(projectDir, 'src', 'main', 'wso2mi', 'artifacts', 'inbound-endpoints').toString();
+
+            const localEntryName = `${data.serverName}-mcp-config`;
+            const emptyXml = `\n        <mcptools>\n        </mcptools>`;
+
+            await rpcClient.getMiDiagramRpcClient().createLocalEntry({
+                directory: localEntriesDir,
+                name: localEntryName,
+                type: 'In-Line XML Entry',
+                value: emptyXml,
+                URL: '',
+                getContentOnly: false,
+            });
+
+            await rpcClient.getMiDiagramRpcClient().createInboundEndpoint({
+                directory: inboundEndpointsDir,
+                attributes: {
+                    name: `${data.serverName}-endpoint`,
+                    sequence: '',
+                    onError: '',
+                    class: 'org.wso2.carbon.inbound.SSE.McpInboundListener',
+                },
+                parameters: {
+                    'inbound.mcp.port': data.port,
+                    'inbound.http.port': data.port,
+                    'inbound.http.context': '/mcp',
+                    'mcp.tools.localentry': localEntryName,
+                    'inbound.behavior': 'listening',
+                },
+            });
+
+            rpcClient.getMiVisualizerRpcClient().showNotification({
+                message: `MCP Server "${data.serverName}" created. Select it from the project panel to add tools.`,
+                type: 'info',
+            });
+
             rpcClient.getMiVisualizerRpcClient().openView({
                 type: EVENT_TYPE.OPEN_VIEW,
-                location: {
-                    view: MACHINE_VIEW.MCPServerFromAPIsForm,
-                    documentUri: path
-                }
+                location: { view: MACHINE_VIEW.Overview },
             });
-        } catch (error) {
-            console.error('Error navigating to APIs form:', error);
+        } catch (err) {
+            setError(`Failed to create MCP Server: ${err instanceof Error ? err.message : String(err)}`);
         } finally {
-            setLoading(false);
+            setSubmitting(false);
         }
     };
-
-    
-    const handleCreateFromSequences = async () => {
-        setLoading(true);
-        try {
-            rpcClient.getMiVisualizerRpcClient().openView({
-                type: EVENT_TYPE.OPEN_VIEW,
-                location: {
-                    view: MACHINE_VIEW.MCPServerFromSequencesForm,
-                    documentUri: path
-                }
-            });
-        } catch (error) {
-            console.error('Error navigating to Sequences form:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    if (checking) {
-        return null;
-    }
 
     return (
         <View>
@@ -196,37 +165,48 @@ export function MCPServerWizard({ path, forceCreate }: MCPServerWizardProps) {
             <ViewContent padding>
                 <Container>
                     <div>
-                        <Title>Select MCP Server Type</Title>
+                        <Title>Create MCP Server</Title>
                         <Description>
-                            Choose how you want to create your MCP server.
+                            Enter a name and port for your new MCP server. After creation, select it from the
+                            project panel to add API or sequence tools.
                         </Description>
                     </div>
 
-                    <OptionsContainer>
-                        {/* Option 1: Create from Existing APIs */}
-                        <OptionCard onClick={handleCreateFromAPIs}>
-                            {/* <OptionIcon className="codicon codicon-symbol-method" /> */}
+                    <form onSubmit={handleSubmit(onSubmit)}>
+                        <FormSection>
+                            <SectionLabel>Server Name</SectionLabel>
+                            <TextField
+                                placeholder="e.g., my-mcp-server"
+                                {...register('serverName')}
+                            />
+                            {errors.serverName && (
+                                <ErrorMessage>{String(errors.serverName?.message)}</ErrorMessage>
+                            )}
+                        </FormSection>
 
-                            <OptionTitle>From Existing APIs</OptionTitle>
-                            <OptionDescription>
-                                Generate an MCP server configuration by selecting existing APIs in your project.
-                            </OptionDescription>
-                            <StyledButton appearance="primary" disabled={loading}>
-                                {loading ? 'Loading...' : 'Select APIs'}
-                            </StyledButton>
-                        </OptionCard>
+                        <FormSection>
+                            <SectionLabel>Port</SectionLabel>
+                            <TextField
+                                placeholder="e.g., 8300"
+                                {...register('port')}
+                            />
+                            {errors.port && (
+                                <ErrorMessage>{String(errors.port?.message)}</ErrorMessage>
+                            )}
+                        </FormSection>
 
-                        {/* Option 2: Create from Existing Sequences */}
-                        <OptionCard onClick={handleCreateFromSequences}>
-                            <OptionTitle>From Existing Sequences</OptionTitle>
-                            <OptionDescription>
-                                Generate an MCP server configuration by selecting existing sequences in your project.
-                            </OptionDescription>
-                            <StyledButton appearance="primary" disabled={loading}>
-                                {loading ? 'Loading...' : 'Select Sequences'}
-                            </StyledButton>
-                        </OptionCard>
-                    </OptionsContainer>
+                        {error && <ErrorMessage>{error}</ErrorMessage>}
+
+                        <ButtonGroup>
+                            <Button
+                                appearance="primary"
+                                disabled={submitting}
+                                onClick={handleSubmit(onSubmit)}
+                            >
+                                {submitting ? 'Creating...' : 'Create MCP Server'}
+                            </Button>
+                        </ButtonGroup>
+                    </form>
                 </Container>
             </ViewContent>
         </View>
