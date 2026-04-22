@@ -18,4 +18,3 @@
 export { default as MCPServerWizard } from './index';
 export { default as MCPServerFromAPIsForm } from './MCPServerFromAPIsForm';
 export { default as MCPServerFromSequencesForm } from './MCPServerFromSequencesForm';
-export { default as MCPServerList } from './MCPServerList';

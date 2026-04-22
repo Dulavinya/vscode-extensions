@@ -18,50 +18,13 @@
 
 import { useState } from 'react';
 import styled from '@emotion/styled';
-import { TextField, Button } from '@wso2/ui-toolkit';
+import { TextField, Button, FormView, FormActions } from '@wso2/ui-toolkit';
 import { useForm } from 'react-hook-form';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
 import { MACHINE_VIEW, EVENT_TYPE } from '@wso2/mi-core';
 import { useVisualizerContext } from '@wso2/mi-rpc-client';
-import { View, ViewContent, ViewHeader } from '../../../components/View';
 import * as pathModule from 'path';
-
-const Container = styled.div`
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    flex: 1;
-    max-width: 600px;
-`;
-
-const Title = styled.h2`
-    color: var(--vscode-editor-foreground);
-    margin: 0 0 8px 0;
-    font-size: 20px;
-    font-weight: 600;
-`;
-
-const Description = styled.p`
-    color: var(--vscode-descriptionForeground);
-    margin: 0 0 20px 0;
-    font-size: 13px;
-    line-height: 1.5;
-`;
-
-const FormSection = styled.div`
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-bottom: 16px;
-`;
-
-const SectionLabel = styled.label`
-    color: var(--vscode-editor-foreground);
-    font-weight: 500;
-    font-size: 14px;
-    display: block;
-`;
 
 const ErrorMessage = styled.div`
     color: var(--vscode-inputValidation-errorBorder);
@@ -70,13 +33,6 @@ const ErrorMessage = styled.div`
     border-radius: 4px;
     background: var(--vscode-inputValidation-errorBackground);
     font-size: 12px;
-`;
-
-const ButtonGroup = styled.div`
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
-    margin-top: 8px;
 `;
 
 const schema = yup.object({
@@ -103,6 +59,13 @@ export function MCPServerWizard({ path }: MCPServerWizardProps) {
     });
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const handleClose = () => {
+        rpcClient.getMiVisualizerRpcClient().openView({
+            type: EVENT_TYPE.OPEN_VIEW,
+            location: { view: MACHINE_VIEW.Overview },
+        });
+    };
 
     const onSubmit = async (data: any) => {
         setSubmitting(true);
@@ -148,10 +111,7 @@ export function MCPServerWizard({ path }: MCPServerWizardProps) {
                 type: 'info',
             });
 
-            rpcClient.getMiVisualizerRpcClient().openView({
-                type: EVENT_TYPE.OPEN_VIEW,
-                location: { view: MACHINE_VIEW.Overview },
-            });
+            handleClose();
         } catch (err) {
             setError(`Failed to create MCP Server: ${err instanceof Error ? err.message : String(err)}`);
         } finally {
@@ -160,56 +120,35 @@ export function MCPServerWizard({ path }: MCPServerWizardProps) {
     };
 
     return (
-        <View>
-            <ViewHeader title="Create MCP Server" icon="server" />
-            <ViewContent padding>
-                <Container>
-                    <div>
-                        <Title>Create MCP Server</Title>
-                        <Description>
-                            Enter a name and port for your new MCP server. After creation, select it from the
-                            project panel to add API or sequence tools.
-                        </Description>
-                    </div>
-
-                    <form onSubmit={handleSubmit(onSubmit)}>
-                        <FormSection>
-                            <SectionLabel>Server Name</SectionLabel>
-                            <TextField
-                                placeholder="e.g., my-mcp-server"
-                                {...register('serverName')}
-                            />
-                            {errors.serverName && (
-                                <ErrorMessage>{String(errors.serverName?.message)}</ErrorMessage>
-                            )}
-                        </FormSection>
-
-                        <FormSection>
-                            <SectionLabel>Port</SectionLabel>
-                            <TextField
-                                placeholder="e.g., 8300"
-                                {...register('port')}
-                            />
-                            {errors.port && (
-                                <ErrorMessage>{String(errors.port?.message)}</ErrorMessage>
-                            )}
-                        </FormSection>
-
-                        {error && <ErrorMessage>{error}</ErrorMessage>}
-
-                        <ButtonGroup>
-                            <Button
-                                appearance="primary"
-                                disabled={submitting}
-                                onClick={handleSubmit(onSubmit)}
-                            >
-                                {submitting ? 'Creating...' : 'Create MCP Server'}
-                            </Button>
-                        </ButtonGroup>
-                    </form>
-                </Container>
-            </ViewContent>
-        </View>
+        <FormView title="Create MCP Server" onClose={handleClose}>
+            <TextField
+                required
+                label="Server Name"
+                placeholder="e.g., my-mcp-server"
+                {...register('serverName')}
+                errorMsg={errors.serverName ? String(errors.serverName.message) : undefined}
+            />
+            <TextField
+                required
+                label="Port"
+                placeholder="e.g., 8300"
+                {...register('port')}
+                errorMsg={errors.port ? String(errors.port.message) : undefined}
+            />
+            {error && <ErrorMessage>{error}</ErrorMessage>}
+            <FormActions>
+                <Button
+                    appearance="primary"
+                    disabled={submitting}
+                    onClick={handleSubmit(onSubmit)}
+                >
+                    {submitting ? 'Creating...' : 'Create MCP Server'}
+                </Button>
+                <Button appearance="secondary" onClick={handleClose}>
+                    Cancel
+                </Button>
+            </FormActions>
+        </FormView>
     );
 }
 

@@ -764,7 +764,7 @@ export function MCPServerFromSequencesForm({ path }: MCPServerFromSequencesFormP
 
         rpcClient.getMiVisualizerRpcClient().openView({
             type: EVENT_TYPE.OPEN_VIEW,
-            location: { view: MACHINE_VIEW.MCPServerList, documentUri: path }
+            location: { view: MACHINE_VIEW.Overview }
         });
     };
 
@@ -849,7 +849,7 @@ export function MCPServerFromSequencesForm({ path }: MCPServerFromSequencesFormP
                                 onClick={() => {
                                     rpcClient.getMiVisualizerRpcClient().openView({
                                         type: EVENT_TYPE.OPEN_VIEW,
-                                        location: { view: MACHINE_VIEW.MCPServerList, documentUri: path }
+                                        location: { view: MACHINE_VIEW.Overview }
                                     });
                                 }}
                             >

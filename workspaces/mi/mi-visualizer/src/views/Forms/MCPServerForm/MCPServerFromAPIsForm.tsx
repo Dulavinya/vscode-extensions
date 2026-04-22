@@ -26,6 +26,7 @@ import { useVisualizerContext } from '@wso2/mi-rpc-client';
 import { EVENT_TYPE, MACHINE_VIEW } from '@wso2/mi-core';
 import { View, ViewContent, ViewHeader } from '../../../components/View';
 import AddToolDialog from './AddToolDialog';
+import { CreateScratchToolDialog, ScratchToolData } from './CreateScratchToolDialog';
 import * as pathModule from 'path';
 import * as yaml from 'yaml';
 
@@ -534,7 +535,7 @@ function cleanPathForToolName(path: string): string {
         .replace(/^_+|_+$/g, '');
 }
 
-function convertToJsonSchema(input: string): string | null {
+export function convertToJsonSchema(input: string): string | null {
     if (!input.trim()) return null;
     try {
         const sanitized = input.replace(/:\s*(string|number|integer|boolean|array|object|null)\b/g, ': "$1"');
@@ -1001,6 +1002,7 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
     const [error, setError] = useState<string | null>(null);
     const [showAddAPIDialog, setShowAddAPIDialog] = useState(false);
     const [showAddSeqDialog, setShowAddSeqDialog] = useState(false);
+    const [showCreateScratchDialog, setShowCreateScratchDialog] = useState(false);
     const [showToolTypeSelector, setShowToolTypeSelector] = useState(false);
     const [selectedAPIForTool, setSelectedAPIForTool] = useState<string>('');
 
@@ -1145,6 +1147,48 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
         setError(null);
     };
 
+    // ─── Create scratch tool ────────────────────────────────────────────────────
+
+    const confirmAddScratchTool = async (data: ScratchToolData) => {
+        try {
+            const sequenceName = data.name.toLowerCase()
+                .replace(/[^a-z0-9]/g, '_')
+                .replace(/_{2,}/g, '_')
+                .replace(/^_+|_+$/, '') + '_tool';
+
+            const projectRootResp = await rpcClient.getMiDiagramRpcClient().getProjectRoot({ path });
+            const sequencesDir = pathModule.join(
+                projectRootResp.path, 'src', 'main', 'wso2mi', 'artifacts', 'sequences'
+            ).toString();
+
+            await rpcClient.getMiDiagramRpcClient().createSequence({
+                directory: sequencesDir,
+                name: sequenceName,
+                endpoint: '',
+                onErrorSequence: '',
+                getContentOnly: false,
+                statistics: false,
+                trace: false,
+            });
+
+            const newTool: SequenceTool = {
+                kind: 'sequence',
+                id: crypto.randomUUID(),
+                name: data.name,
+                description: data.description,
+                sequenceName,
+                sequenceXmlPath: pathModule.join(sequencesDir, sequenceName + '.xml').toString(),
+                inputSchema: data.inputSchema,
+            };
+            setTools(prev => [...prev, newTool]);
+            setShowCreateScratchDialog(false);
+            setError(null);
+        } catch (err) {
+            setError(`Failed to create sequence: ${err instanceof Error ? err.message : String(err)}`);
+            setShowCreateScratchDialog(false);
+        }
+    };
+
     const removeTool = (toolId: string) => setTools(tools.filter(t => t.id !== toolId));
 
     // ─── Submit ─────────────────────────────────────────────────────────────────
@@ -1266,6 +1310,18 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
                                 <ToolTypePageCardDesc>
                                     Expose a mediation sequence as a tool. Select from existing
                                     sequences defined in this project.
+                                </ToolTypePageCardDesc>
+                            </ToolTypePageCard>
+
+                            <ToolTypePageCard
+                                onClick={() => {
+                                    setShowToolTypeSelector(false);
+                                    setShowCreateScratchDialog(true);
+                                }}
+                            >
+                                <ToolTypePageCardTitle>New Tool</ToolTypePageCardTitle>
+                                <ToolTypePageCardDesc>
+                                    Create a tool from scratch.
                                 </ToolTypePageCardDesc>
                             </ToolTypePageCard>
                         </ToolTypePageCards>
@@ -1428,6 +1484,12 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
                     sequences={sequences}
                     onConfirm={confirmAddSeqTools}
                     onCancel={() => setShowAddSeqDialog(false)}
+                />
+
+                <CreateScratchToolDialog
+                    isOpen={showCreateScratchDialog}
+                    onConfirm={confirmAddScratchTool}
+                    onCancel={() => setShowCreateScratchDialog(false)}
                 />
             </ViewContent>
         </View>
