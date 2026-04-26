@@ -30,7 +30,7 @@ import { CreateScratchToolDialog, ScratchToolData } from './CreateScratchToolDia
 import * as pathModule from 'path';
 import * as yaml from 'yaml';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+//  Types 
 
 interface APIOperation {
     id: string;
@@ -84,7 +84,7 @@ interface SequenceTool {
 
 type UnifiedTool = APITool | SequenceTool;
 
-// ─── Styled Components ────────────────────────────────────────────────────────
+//  Styled Components 
 
 const Container = styled.div`
     display: flex;
@@ -240,7 +240,7 @@ const AddToolBtn = styled.button`
     &:disabled { opacity: 0.5; cursor: not-allowed; }
 `;
 
-// ─── Sequence Tool Dialog ─────────────────────────────────────────────────────
+//  Sequence Tool Dialog 
 
 const DialogOverlay = styled.div`
     position: fixed;
@@ -430,7 +430,7 @@ const InfoValue = styled.span`
     font-family: var(--vscode-editor-font-family, monospace);
 `;
 
-// ─── Tool Type Selection Page ─────────────────────────────────────────────────
+//  Tool Type Selection Page 
 
 const ToolTypePage = styled.div`
     display: flex;
@@ -525,8 +525,7 @@ const DialogAddBtn = styled(DialogBtn)`
     &:disabled { opacity: 0.6; cursor: not-allowed; }
 `;
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
+//  Helpers 
 function cleanPathForToolName(path: string): string {
     return path
         .replace(/[{}]/g, '')
@@ -763,8 +762,7 @@ const artifactParserConfig = {
     }
 };
 
-// ─── Add Sequence Tool Dialog ──────────────────────────────────────────────────
-
+//  Add Sequence Tool Dialog 
 interface AddSequenceToolDialogProps {
     isOpen: boolean;
     sequences: Sequence[];
@@ -945,7 +943,7 @@ function AddSequenceToolDialog({ isOpen, sequences, onConfirm, onCancel }: AddSe
     );
 }
 
-// ─── Form Schema ──────────────────────────────────────────────────────────────
+//  Form Schema 
 
 const schema = yup.object({
     serverName: yup.string()
@@ -958,7 +956,7 @@ const schema = yup.object({
         .integer('Port must be an integer'),
 });
 
-// ─── Props ────────────────────────────────────────────────────────────────────
+//  Props
 
 export interface MCPServerEditData {
     serverName: string;
@@ -984,8 +982,7 @@ export interface MCPServerFromAPIsFormProps {
     editData?: MCPServerEditData;
 }
 
-// ─── Main Form ────────────────────────────────────────────────────────────────
-
+//  Main Form 
 export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormProps) {
     const isEditMode = !!editData;
     const { rpcClient } = useVisualizerContext();
@@ -1005,6 +1002,32 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
     const [showCreateScratchDialog, setShowCreateScratchDialog] = useState(false);
     const [showToolTypeSelector, setShowToolTypeSelector] = useState(false);
     const [selectedAPIForTool, setSelectedAPIForTool] = useState<string>('');
+    // ─── Auto-save helpers (edit mode only) ────────────────────────────────────
+
+    const saveToolsToLocalEntry = async (currentTools: UnifiedTool[]) => {
+        if (!isEditMode || !editData?.localEntryPath) return;
+        try {
+            const projectRootResp = await rpcClient.getMiDiagramRpcClient().getProjectRoot({ path });
+            const projectDir = projectRootResp.path;
+            const localEntriesDir = pathModule.join(projectDir, 'src', 'main', 'wso2mi', 'artifacts', 'local-entries').toString();
+            const apiDefDir = pathModule.join(projectDir, 'src', 'main', 'wso2mi', 'resources', 'api-definitions').toString();
+            const apiTools = currentTools.filter((t): t is APITool => t.kind === 'api');
+            const inputSchemas = await buildInputSchemasForAPITools(apiTools, apiDefDir, async (filePath) => {
+                const resp = await rpcClient.getMiDiagramRpcClient().readIdpSchemaFileContent({ filePath });
+                return resp.fileContent ?? null;
+            });
+            await rpcClient.getMiDiagramRpcClient().createLocalEntry({
+                directory: localEntriesDir,
+                name: `${editData.serverName}-mcp-config`,
+                type: 'In-Line XML Entry',
+                value: generateMixedLocalEntryXml(currentTools, inputSchemas),
+                URL: '',
+                getContentOnly: false,
+            });
+        } catch (err) {
+            console.error('Auto-save failed:', err);
+        }
+    };
 
     // Load project structure (APIs + sequences) and, if editing, existing tools from XML
     useEffect(() => {
@@ -1085,7 +1108,7 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
         loadData();
     }, [rpcClient, path]);
 
-    // ─── Add API tools ──────────────────────────────────────────────────────────
+    //  Add API tools 
 
     const confirmAddAPITools = (
         apiId: string,
@@ -1117,13 +1140,15 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
             })
             .filter((t): t is NonNullable<typeof t> => t !== null) as APITool[];
 
-        setTools(prev => [...prev, ...newTools]);
+        const updatedTools = [...tools, ...newTools];
+        setTools(updatedTools);
+        saveToolsToLocalEntry(updatedTools);
         setShowAddAPIDialog(false);
         setSelectedAPIForTool('');
         setError(null);
     };
 
-    // ─── Add sequence tools ─────────────────────────────────────────────────────
+    //  Add sequence tools 
 
     const confirmAddSeqTools = (
         selected: Array<{ sequenceId: string; customName: string; description: string; inputSchema: string }>
@@ -1142,12 +1167,14 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
                 sequenceXmlPath: sequences.find(sq => sq.id === s.sequenceId)?.xmlPath || '',
                 inputSchema: s.inputSchema,
             }));
-        setTools(prev => [...prev, ...newTools]);
+        const updatedTools = [...tools, ...newTools];
+        setTools(updatedTools);
+        saveToolsToLocalEntry(updatedTools);
         setShowAddSeqDialog(false);
         setError(null);
     };
 
-    // ─── Create scratch tool ────────────────────────────────────────────────────
+    //  Create scratch tool 
 
     const confirmAddScratchTool = async (data: ScratchToolData) => {
         try {
@@ -1171,27 +1198,39 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
                 trace: false,
             });
 
+            const sequenceXmlPath = pathModule.join(sequencesDir, sequenceName + '.xml').toString();
             const newTool: SequenceTool = {
                 kind: 'sequence',
                 id: crypto.randomUUID(),
                 name: data.name,
                 description: data.description,
                 sequenceName,
-                sequenceXmlPath: pathModule.join(sequencesDir, sequenceName + '.xml').toString(),
+                sequenceXmlPath,
                 inputSchema: data.inputSchema,
             };
-            setTools(prev => [...prev, newTool]);
+            const updatedTools = [...tools, newTool];
+            setTools(updatedTools);
+            await saveToolsToLocalEntry(updatedTools);
             setShowCreateScratchDialog(false);
             setError(null);
+
+            rpcClient.getMiVisualizerRpcClient().openView({
+                type: EVENT_TYPE.OPEN_VIEW,
+                location: { view: MACHINE_VIEW.SequenceView, documentUri: sequenceXmlPath },
+            });
         } catch (err) {
             setError(`Failed to create sequence: ${err instanceof Error ? err.message : String(err)}`);
             setShowCreateScratchDialog(false);
         }
     };
 
-    const removeTool = (toolId: string) => setTools(tools.filter(t => t.id !== toolId));
+    const removeTool = (toolId: string) => {
+        const updatedTools = tools.filter(t => t.id !== toolId);
+        setTools(updatedTools);
+        saveToolsToLocalEntry(updatedTools);
+    };
 
-    // ─── Submit ─────────────────────────────────────────────────────────────────
+    //  Submit 
 
     const onSubmit = async (data: any) => {
         setSubmitting(true);
@@ -1261,7 +1300,7 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
         }
     };
 
-    // ─── Render ─────────────────────────────────────────────────────────────────
+    //  Render 
 
     const title = isEditMode
         ? `Edit MCP Server: ${editData!.serverName}`
@@ -1460,9 +1499,9 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
                                     onClick={handleSubmit(onSubmit)}
                                 >
                                     {submitting
-                                        ? (isEditMode ? 'Saving...' : 'Creating...')
+                                        ? 'Creating...'
                                         : isEditMode
-                                            ? `Save Changes (${tools.length} tool${tools.length !== 1 ? 's' : ''})`
+                                            ? 'Done'
                                             : `Create MCP Server (${tools.length} tool${tools.length !== 1 ? 's' : ''})`}
                                 </Button>
                             </ButtonGroup>

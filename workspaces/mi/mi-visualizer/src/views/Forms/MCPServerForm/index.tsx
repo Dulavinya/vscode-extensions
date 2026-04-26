@@ -106,12 +106,15 @@ export function MCPServerWizard({ path }: MCPServerWizardProps) {
                 },
             });
 
-            rpcClient.getMiVisualizerRpcClient().showNotification({
-                message: `MCP Server "${data.serverName}" created. Select it from the project panel to add tools.`,
-                type: 'info',
+            const localEntryPath = pathModule.join(localEntriesDir, localEntryName + '.xml').toString();
+            rpcClient.getMiVisualizerRpcClient().openView({
+                type: EVENT_TYPE.OPEN_VIEW,
+                location: {
+                    view: MACHINE_VIEW.MCPServerFromAPIsForm,
+                    documentUri: path,
+                    customProps: { editData: { serverName: data.serverName, localEntryPath } },
+                },
             });
-
-            handleClose();
         } catch (err) {
             setError(`Failed to create MCP Server: ${err instanceof Error ? err.message : String(err)}`);
         } finally {
