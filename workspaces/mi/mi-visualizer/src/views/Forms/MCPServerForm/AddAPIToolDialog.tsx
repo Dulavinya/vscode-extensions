@@ -34,7 +34,7 @@ interface API {
     operations: APIOperation[];
 }
 
-interface AddToolDialogProps {
+interface AddAPIToolDialogProps {
     isOpen: boolean;
     apis: API[];
     selectedAPIForTool: string;
@@ -286,17 +286,23 @@ const EmptyMessage = styled.div`
     font-size: 12px;
 `;
 
-export function AddToolDialog({
+const InputError = styled.span`
+    color: var(--vscode-inputValidation-errorForeground, var(--vscode-errorForeground));
+    font-size: 11px;
+`;
+
+export function AddAPIToolDialog({
     isOpen,
     apis,
     selectedAPIForTool,
     onAPIChange,
     onConfirmBulk,
     onCancel,
-}: AddToolDialogProps) {
+}: AddAPIToolDialogProps) {
     const [selectedOperationIds, setSelectedOperationIds] = useState<Set<string>>(new Set());
     const [customNames, setCustomNames] = useState<Record<string, string>>({});
     const [customDescriptions, setCustomDescriptions] = useState<Record<string, string>>({});
+    const [descriptionErrors, setDescriptionErrors] = useState<Record<string, string>>({});
 
     if (!isOpen) return null;
 
@@ -306,6 +312,7 @@ export function AddToolDialog({
         const newSet = new Set(selectedOperationIds);
         if (newSet.has(operationId)) {
             newSet.delete(operationId);
+            setDescriptionErrors(prev => { const n = { ...prev }; delete n[operationId]; return n; });
         } else {
             newSet.add(operationId);
         }
@@ -318,6 +325,13 @@ export function AddToolDialog({
 
     const handleCustomDescriptionChange = (operationId: string, description: string) => {
         setCustomDescriptions(prev => ({ ...prev, [operationId]: description }));
+        if (description.trim()) setDescriptionErrors(prev => { const n = { ...prev }; delete n[operationId]; return n; });
+    };
+
+    const handleDescriptionBlur = (operationId: string) => {
+        if (!customDescriptions[operationId]?.trim()) {
+            setDescriptionErrors(prev => ({ ...prev, [operationId]: 'Description is required.' }));
+        }
     };
 
     const handleSelectAll = () => {
@@ -334,10 +348,19 @@ export function AddToolDialog({
         setSelectedOperationIds(new Set());
         setCustomNames({});
         setCustomDescriptions({});
+        setDescriptionErrors({});
     };
 
     const handleConfirm = () => {
         if (!selectedAPIForTool || selectedOperationIds.size === 0) return;
+        const missingDesc: Record<string, string> = {};
+        Array.from(selectedOperationIds).forEach(opId => {
+            if (!customDescriptions[opId]?.trim()) missingDesc[opId] = 'Description is required.';
+        });
+        if (Object.keys(missingDesc).length > 0) {
+            setDescriptionErrors(missingDesc);
+            return;
+        }
 
         const selectedOperations = Array.from(selectedOperationIds).flatMap(opId => {
             const operation = selectedAPI?.operations.find((op: APIOperation) => op.id === opId);
@@ -345,7 +368,7 @@ export function AddToolDialog({
             return [{
                 id: opId,
                 customName: customNames[opId] || getDefaultName(operation),
-                description: customDescriptions[opId] || '',
+                description: customDescriptions[opId]!.trim(),
             }];
         });
 
@@ -353,12 +376,14 @@ export function AddToolDialog({
         setSelectedOperationIds(new Set());
         setCustomNames({});
         setCustomDescriptions({});
+        setDescriptionErrors({});
     };
 
     const allSelected = !!selectedAPI
         && selectedAPI.operations.length > 0
         && selectedOperationIds.size === selectedAPI.operations.length;
     const someSelected = selectedOperationIds.size > 0;
+    const hasMissingDescriptions = Array.from(selectedOperationIds).some(id => !customDescriptions[id]?.trim());
 
     return (
         <DialogOverlay onClick={onCancel}>
@@ -429,15 +454,17 @@ export function AddToolDialog({
                                                     onChange={(e) => handleCustomNameChange(op.id, e.target.value)}
                                                     onClick={(e) => e.stopPropagation()}
                                                 />
-                                                <InputFieldLabel htmlFor={`desc-${op.id}`}>Description</InputFieldLabel>
+                                                <InputFieldLabel htmlFor={`desc-${op.id}`}>Description *</InputFieldLabel>
                                                 <CustomInput
                                                     id={`desc-${op.id}`}
                                                     type="text"
                                                     placeholder={op.summary || 'Describe what this tool does'}
                                                     value={customDescriptions[op.id] || ''}
                                                     onChange={(e) => handleCustomDescriptionChange(op.id, e.target.value)}
+                                                    onBlur={() => handleDescriptionBlur(op.id)}
                                                     onClick={(e) => e.stopPropagation()}
                                                 />
+                                                {descriptionErrors[op.id] && <InputError>{descriptionErrors[op.id]}</InputError>}
                                             </CustomInputsContainer>
                                         )}
                                     </OperationItem>
@@ -458,7 +485,7 @@ export function AddToolDialog({
                     )}
                     <DialogAddBtn
                         onClick={handleConfirm}
-                        disabled={!selectedAPIForTool || !someSelected}
+                        disabled={!selectedAPIForTool || !someSelected || hasMissingDescriptions}
                     >
                         Add Selected Tools ({selectedOperationIds.size})
                     </DialogAddBtn>
@@ -468,4 +495,4 @@ export function AddToolDialog({
     );
 }
 
-export default AddToolDialog;
+export default AddAPIToolDialog;

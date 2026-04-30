@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { ChangeEvent, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import styled from '@emotion/styled';
 import { TextField, Button } from '@wso2/ui-toolkit';
 import { useForm } from 'react-hook-form';
@@ -25,66 +25,22 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import { useVisualizerContext } from '@wso2/mi-rpc-client';
 import { EVENT_TYPE, MACHINE_VIEW } from '@wso2/mi-core';
 import { View, ViewContent, ViewHeader } from '../../../components/View';
-import AddToolDialog from './AddToolDialog';
-import { CreateScratchToolDialog, ScratchToolData } from './CreateScratchToolDialog';
 import * as pathModule from 'path';
-import * as yaml from 'yaml';
 
-//  Types 
+import { API, APITool, Sequence, SequenceTool, UnifiedTool } from './types';
+import {
+    artifactParserConfig,
+    buildInputSchemasForAPITools,
+    cleanPathForToolName,
+    generateToolsXml,
+    parsePortFromInboundEndpoint,
+    parseToolsFromXML,
+} from './utils';
+import AddAPIToolDialog from './AddAPIToolDialog';
+import { AddSequenceToolDialog } from './AddSequenceToolDialog';
+import { CreateScratchToolDialog, ScratchToolData } from './CreateScratchToolDialog';
 
-interface APIOperation {
-    id: string;
-    method: string;
-    path: string;
-    summary: string;
-}
-
-interface API {
-    id: string;
-    name: string;
-    context: string;
-    version: string;
-    rawVersion: string;
-    xmlPath: string;
-    operations: APIOperation[];
-}
-
-interface Sequence {
-    id: string;
-    name: string;
-    xmlPath: string;
-}
-
-interface APITool {
-    kind: 'api';
-    id: string;
-    name: string;
-    description: string;
-    apiId: string;
-    apiName: string;
-    apiVersion: string;
-    apiRawVersion: string;
-    apiXmlPath: string;
-    operationId: string;
-    operationMethod: string;
-    operationPath: string;
-    operationSummary: string;
-    inputSchema?: string;
-}
-
-interface SequenceTool {
-    kind: 'sequence';
-    id: string;
-    name: string;
-    description: string;
-    sequenceName: string;
-    sequenceXmlPath: string;
-    inputSchema: string;
-}
-
-type UnifiedTool = APITool | SequenceTool;
-
-//  Styled Components 
+// Styled Components
 
 const Container = styled.div`
     display: flex;
@@ -240,165 +196,6 @@ const AddToolBtn = styled.button`
     &:disabled { opacity: 0.5; cursor: not-allowed; }
 `;
 
-//  Sequence Tool Dialog 
-
-const DialogOverlay = styled.div`
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-`;
-
-const DialogContent = styled.div`
-    background: var(--vscode-editor-background);
-    border: 1px solid var(--vscode-panel-border);
-    border-radius: 8px;
-    padding: 20px;
-    max-width: 600px;
-    width: 90%;
-    max-height: 80vh;
-    overflow-y: auto;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-`;
-
-const DialogTitle = styled.h3`
-    color: var(--vscode-editor-foreground);
-    margin: 0 0 15px 0;
-    font-size: 16px;
-    font-weight: 600;
-`;
-
-const DialogField = styled.div`
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-bottom: 15px;
-`;
-
-const DialogLabel = styled.label`
-    color: var(--vscode-editor-foreground);
-    font-size: 12px;
-    font-weight: 500;
-`;
-
-const SequencesList = styled.div`
-    background: var(--vscode-input-background);
-    border: 1px solid var(--vscode-input-border);
-    border-radius: 3px;
-    max-height: 400px;
-    overflow-y: auto;
-    padding: 8px 0;
-`;
-
-const SequenceItem = styled.div`
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--vscode-panel-border);
-    &:last-child { border-bottom: none; }
-    &:hover { background: var(--vscode-list-hoverBackground); }
-`;
-
-const SequenceItemHeader = styled.div`
-    display: flex;
-    align-items: center;
-    gap: 10px;
-`;
-
-const SequenceCheckbox = styled.input`
-    cursor: pointer;
-    accent-color: var(--vscode-focusBorder);
-    margin-top: 2px;
-`;
-
-const SequenceName = styled.span`
-    color: var(--vscode-editor-foreground);
-    font-family: monospace;
-    font-size: 12px;
-`;
-
-const SelectAllRow = styled.div`
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--vscode-panel-border);
-    background: var(--vscode-list-activeSelectionBackground);
-`;
-
-const SelectAllLabel = styled.label`
-    cursor: pointer;
-    margin-bottom: 0;
-    font-size: 12px;
-    color: var(--vscode-editor-foreground);
-`;
-
-const CustomInputsContainer = styled.div`
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin-left: 26px;
-`;
-
-const InputFieldLabel = styled.label`
-    font-size: 10px;
-    color: var(--vscode-descriptionForeground);
-    margin-top: 2px;
-`;
-
-const CustomInput = styled.input`
-    background: var(--vscode-editor-background);
-    color: var(--vscode-editor-foreground);
-    border: 1px solid var(--vscode-input-border);
-    padding: 4px 6px;
-    border-radius: 3px;
-    font-size: 11px;
-    font-family: inherit;
-    &:focus { outline: none; border-color: var(--vscode-focusBorder); }
-`;
-
-const SchemaRow = styled.div`
-    display: flex;
-    align-items: center;
-    gap: 8px;
-`;
-
-const SchemaTextarea = styled.textarea`
-    width: 100%;
-    min-height: 80px;
-    padding: 6px 8px;
-    font-size: 12px;
-    font-family: var(--vscode-editor-font-family, monospace);
-    background: var(--vscode-input-background);
-    color: var(--vscode-input-foreground);
-    border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-    border-radius: 3px;
-    resize: vertical;
-    box-sizing: border-box;
-    &:focus { outline: none; border-color: var(--vscode-focusBorder); }
-`;
-
-const SchemaImportBtn = styled.button`
-    padding: 4px 10px;
-    font-size: 12px;
-    white-space: nowrap;
-    border: 1px solid var(--vscode-button-secondaryBackground);
-    border-radius: 3px;
-    cursor: pointer;
-    background: var(--vscode-button-secondaryBackground);
-    color: var(--vscode-button-secondaryForeground);
-    &:hover { background: var(--vscode-button-secondaryHoverBackground); }
-`;
-
-const SchemaError = styled.span`
-    color: var(--vscode-inputValidation-errorForeground, var(--vscode-errorForeground));
-    font-size: 11px;
-`;
-
 const InfoPanel = styled.div`
     display: flex;
     flex-direction: column;
@@ -430,7 +227,7 @@ const InfoValue = styled.span`
     font-family: var(--vscode-editor-font-family, monospace);
 `;
 
-//  Tool Type Selection Page 
+// Tool Type Selection Page
 
 const ToolTypePage = styled.div`
     display: flex;
@@ -440,6 +237,11 @@ const ToolTypePage = styled.div`
     gap: 24px;
     width: 100%;
     text-align: center;
+`;
+
+const ToolTypePageCards = styled.div`
+    display: flex;
+    gap: 20px;
 `;
 
 const ToolTypePageCard = styled.div`
@@ -470,11 +272,6 @@ const ToolTypePageCardDesc = styled.div`
     line-height: 1.5;
 `;
 
-const ToolTypePageCards = styled.div`
-    display: flex;
-    gap: 20px;
-`;
-
 const BackBtn = styled.button`
     align-self: flex-start;
     padding: 6px 14px;
@@ -488,462 +285,7 @@ const BackBtn = styled.button`
     &:hover { background: var(--vscode-button-secondaryHoverBackground); }
 `;
 
-const DialogButtonGroup = styled.div`
-    display: flex;
-    gap: 10px;
-    justify-content: space-between;
-    margin-top: 15px;
-    padding-top: 15px;
-    border-top: 1px solid var(--vscode-panel-border);
-`;
-
-const SelectionInfo = styled.span`
-    color: var(--vscode-descriptionForeground);
-    font-size: 12px;
-    align-self: center;
-`;
-
-const DialogBtn = styled.button`
-    padding: 6px 12px;
-    font-size: 12px;
-    border: none;
-    border-radius: 3px;
-    cursor: pointer;
-    font-weight: 500;
-`;
-
-const DialogCancelBtn = styled(DialogBtn)`
-    background: var(--vscode-button-secondaryBackground);
-    color: var(--vscode-button-secondaryForeground);
-    &:hover { background: var(--vscode-button-secondaryHoverBackground); }
-`;
-
-const DialogAddBtn = styled(DialogBtn)`
-    background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
-    &:hover { background: var(--vscode-button-hoverBackground); }
-    &:disabled { opacity: 0.6; cursor: not-allowed; }
-`;
-
-//  Helpers 
-function cleanPathForToolName(path: string): string {
-    return path
-        .replace(/[{}]/g, '')
-        .replace(/[^a-zA-Z0-9]/g, '_')
-        .replace(/_{2,}/g, '_')
-        .replace(/^_+|_+$/g, '');
-}
-
-export function convertToJsonSchema(input: string): string | null {
-    if (!input.trim()) return null;
-    try {
-        const sanitized = input.replace(/:\s*(string|number|integer|boolean|array|object|null)\b/g, ': "$1"');
-        const parsed = JSON.parse(sanitized);
-        if (parsed.type || parsed.properties) return JSON.stringify(parsed);
-        const properties: Record<string, { type: string }> = {};
-        for (const [k, v] of Object.entries(parsed)) properties[k] = { type: v as string };
-        return JSON.stringify({ type: 'object', properties, additionalProperties: false });
-    } catch {
-        return null;
-    }
-}
-
-function extractInputSchema(spec: any, method: string, operationPath: string): object {
-    const pathItem = spec?.paths?.[operationPath];
-    if (!pathItem) return { type: 'object', properties: {}, additionalProperties: false };
-    const operation = pathItem[method.toLowerCase()];
-    if (!operation) return { type: 'object', properties: {}, additionalProperties: false };
-
-    const properties: Record<string, any> = {};
-    const required: string[] = [];
-
-    if (Array.isArray(operation.parameters)) {
-        for (const param of operation.parameters) {
-            if ((param.in === 'path' || param.in === 'query') && param.name && param.schema) {
-                properties[param.name] = { ...param.schema, ...(param.description ? { description: param.description } : {}) };
-                if (param.required) required.push(param.name);
-            }
-        }
-    }
-
-    const bodySchema = operation.requestBody?.content?.['application/json']?.schema;
-    if (bodySchema?.properties) {
-        for (const [key, value] of Object.entries(bodySchema.properties)) {
-            properties[key] = value;
-        }
-        if (Array.isArray(bodySchema.required)) required.push(...bodySchema.required);
-    }
-
-    const schema: any = { type: 'object', properties, additionalProperties: false };
-    if (required.length > 0) schema.required = required;
-    return schema;
-}
-
-function parseToolsFromXML(xmlContent: string): UnifiedTool[] {
-    try {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(xmlContent, 'text/xml');
-        const toolElements = Array.from(doc.querySelectorAll('tool'));
-
-        return toolElements.map(toolEl => {
-            const name = toolEl.getAttribute('name') || '';
-            const description = toolEl.querySelector('description')?.textContent?.trim() || '';
-            const seqEl = toolEl.querySelector('sequence');
-            const apiEl = toolEl.querySelector('api');
-
-            if (seqEl) {
-                return {
-                    kind: 'sequence' as const,
-                    id: crypto.randomUUID(),
-                    name,
-                    description,
-                    sequenceName: seqEl.textContent?.trim() || '',
-                    sequenceXmlPath: '',
-                    inputSchema: toolEl.querySelector('inputSchema')?.textContent?.trim()
-                        || '{"type":"object","properties":{},"additionalProperties":false}',
-                };
-            } else {
-                const method = toolEl.querySelector('method')?.textContent?.trim() || '';
-                const resource = toolEl.querySelector('resource')?.textContent?.trim() || '';
-                const apiName = apiEl?.textContent?.trim() || '';
-                const existingSchema = toolEl.querySelector('inputSchema')?.textContent?.trim();
-                return {
-                    kind: 'api' as const,
-                    id: crypto.randomUUID(),
-                    name,
-                    description,
-                    apiId: apiName,
-                    apiName,
-                    apiVersion: '1.0.0',
-                    apiRawVersion: '',
-                    apiXmlPath: '',
-                    operationId: `${method}_${resource}`.replace(/[^a-zA-Z0-9_]/g, '_'),
-                    operationMethod: method,
-                    operationPath: resource,
-                    operationSummary: description,
-                    inputSchema: existingSchema,
-                };
-            }
-        });
-    } catch {
-        return [];
-    }
-}
-
-function parsePortFromInboundEndpoint(xmlContent: string): number | null {
-    try {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(xmlContent, 'text/xml');
-        const params = Array.from(doc.querySelectorAll('parameter'));
-        for (const param of params) {
-            const pname = param.getAttribute('name') || '';
-            if (pname === 'inbound.mcp.port' || pname === 'inbound.http.port') {
-                const val = parseInt(param.textContent?.trim() || '', 10);
-                if (!isNaN(val)) return val;
-            }
-        }
-    } catch {}
-    return null;
-}
-
-function generateMixedLocalEntryXml(tools: UnifiedTool[], inputSchemas: Record<string, object>): string {
-    let toolsXml = '';
-
-    tools.forEach(tool => {
-        if (tool.kind === 'api') {
-            const derived = inputSchemas[tool.id];
-            const isEmpty = !derived || (Object.keys((derived as any).properties ?? {}).length === 0 && !(derived as any).required);
-            const inputSchema = (!isEmpty ? derived : null)
-                ?? (tool.inputSchema ? JSON.parse(tool.inputSchema) : null)
-                ?? { type: 'object', properties: {} };
-            const description = tool.description || tool.operationSummary
-                || `${tool.operationMethod} ${tool.operationPath} - ${tool.apiName}`;
-            toolsXml += `
-            <tool name="${tool.name}">
-                <api>${tool.apiName}</api>
-                <resource>${tool.operationPath}</resource>
-                <method>${tool.operationMethod}</method>
-                <description>${description}</description>
-                <inputSchema>${JSON.stringify(inputSchema)}</inputSchema>
-            </tool>`;
-        } else {
-            toolsXml += `
-            <tool name="${tool.name}">
-                <sequence>${tool.sequenceName}</sequence>
-                <description>${tool.description || tool.sequenceName}</description>
-                <inputSchema>${tool.inputSchema}</inputSchema>
-            </tool>`;
-        }
-    });
-
-    return `
-        <mcptools>${toolsXml}
-        </mcptools>`;
-}
-
-async function buildInputSchemasForAPITools(
-    tools: APITool[],
-    apiDefDir: string,
-    readFile: (filePath: string) => Promise<string | null>
-): Promise<Record<string, object>> {
-    const yamlCache: Record<string, any> = {};
-    const inputSchemas: Record<string, object> = {};
-
-    const readYaml = async (filePath: string): Promise<any> => {
-        if (Object.prototype.hasOwnProperty.call(yamlCache, filePath)) return yamlCache[filePath];
-        try {
-            const content = await readFile(filePath);
-            yamlCache[filePath] = content ? yaml.parse(content) : null;
-        } catch {
-            yamlCache[filePath] = null;
-        }
-        return yamlCache[filePath];
-    };
-
-    for (const tool of tools) {
-        const rawVersion = tool.apiRawVersion || '';
-        const xmlBaseName = tool.apiXmlPath
-            ? pathModule.basename(tool.apiXmlPath, pathModule.extname(tool.apiXmlPath))
-            : tool.apiName;
-
-        const candidates = [
-            ...(rawVersion ? [`${xmlBaseName}_v${rawVersion}.yaml`] : []),
-            `${xmlBaseName}.yaml`,
-        ].map(f => pathModule.join(apiDefDir, f).toString());
-
-        let spec: any = null;
-        for (const candidate of candidates) {
-            spec = await readYaml(candidate);
-            if (spec !== null) break;
-        }
-
-        inputSchemas[tool.id] = spec
-            ? extractInputSchema(spec, tool.operationMethod, tool.operationPath)
-            : { type: 'object', properties: {}, additionalProperties: false };
-    }
-
-    return inputSchemas;
-}
-
-const artifactParserConfig = {
-    apis: {
-        pathInStructure: (structure: any) => structure?.directoryMap?.src?.main?.wso2mi?.artifacts?.apis || [],
-        parseFields: {
-            id: (art: Record<string, any>) => art.name || art.id || art.fileName || '',
-            name: (art: Record<string, any>) => art.name || art.id || art.fileName || '',
-            context: (art: Record<string, any>) => art.context || `/${art.name || art.id || ''}`,
-            version: (art: Record<string, any>) => art.version || '1.0.0',
-            rawVersion: (art: Record<string, any>) => art.version ?? '',
-            xmlPath: (art: Record<string, any>) => art.path || '',
-        },
-        parseOperations: (art: Record<string, any>): APIOperation[] => {
-            const operations: APIOperation[] = [];
-            if (art.resources && Array.isArray(art.resources)) {
-                for (const res of art.resources) {
-                    const methods = Array.isArray(res.methods)
-                        ? res.methods
-                        : typeof res.methods === 'string'
-                        ? res.methods.split(',')
-                        : [];
-                    const uri = res.path || res.uri || res['uri-template'] || res.uriTemplate || '';
-                    for (const m of methods) {
-                        const method = String(m).toUpperCase();
-                        operations.push({
-                            id: `${method}_${uri}`.replace(/[^a-zA-Z0-9_]/g, '_'),
-                            method,
-                            path: uri,
-                            summary: res.summary || ''
-                        });
-                    }
-                }
-            }
-            return operations;
-        }
-    }
-};
-
-//  Add Sequence Tool Dialog 
-interface AddSequenceToolDialogProps {
-    isOpen: boolean;
-    sequences: Sequence[];
-    onConfirm: (selected: Array<{ sequenceId: string; customName: string; description: string; inputSchema: string }>) => void;
-    onCancel: () => void;
-}
-
-function AddSequenceToolDialog({ isOpen, sequences, onConfirm, onCancel }: AddSequenceToolDialogProps) {
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-    const [customNames, setCustomNames] = useState<Record<string, string>>({});
-    const [customDescriptions, setCustomDescriptions] = useState<Record<string, string>>({});
-    const [inputSchemas, setInputSchemas] = useState<Record<string, string>>({});
-    const [schemaErrors, setSchemaErrors] = useState<Record<string, string>>({});
-    const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
-
-    if (!isOpen) return null;
-
-    const toggleSequence = (id: string) => {
-        const next = new Set(selectedIds);
-        next.has(id) ? next.delete(id) : next.add(id);
-        setSelectedIds(next);
-    };
-
-    const handleSelectAll = () => {
-        setSelectedIds(selectedIds.size === sequences.length ? new Set() : new Set(sequences.map(s => s.id)));
-    };
-
-    const validateSchema = (id: string, value: string): boolean => {
-        if (!value.trim()) {
-            setSchemaErrors(prev => { const n = { ...prev }; delete n[id]; return n; });
-            return true;
-        }
-        if (convertToJsonSchema(value) === null) {
-            setSchemaErrors(prev => ({ ...prev, [id]: 'Invalid JSON. Use shorthand like {"amount": number} or full JSON Schema.' }));
-            return false;
-        }
-        setSchemaErrors(prev => { const n = { ...prev }; delete n[id]; return n; });
-        return true;
-    };
-
-    const handleSchemaChange = (id: string, value: string) => {
-        setInputSchemas(prev => ({ ...prev, [id]: value }));
-        validateSchema(id, value);
-    };
-
-    const handleImportFile = (id: string) => { fileInputRefs.current[id]?.click(); };
-
-    const handleFileChange = (id: string, e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const content = event.target?.result as string;
-            setInputSchemas(prev => ({ ...prev, [id]: content }));
-            validateSchema(id, content);
-        };
-        reader.readAsText(file);
-        e.target.value = '';
-    };
-
-    const handleConfirm = () => {
-        if (selectedIds.size === 0) return;
-        if (Array.from(selectedIds).some(id => schemaErrors[id])) return;
-        const emptySchema = JSON.stringify({ type: 'object', properties: {}, additionalProperties: false });
-        const selected = Array.from(selectedIds).map(id => {
-            const raw = inputSchemas[id]?.trim() || '';
-            return {
-                sequenceId: id,
-                customName: customNames[id]?.trim() || id,
-                description: customDescriptions[id]?.trim() || '',
-                inputSchema: (raw ? convertToJsonSchema(raw) : null) || emptySchema,
-            };
-        });
-        onConfirm(selected);
-        setSelectedIds(new Set());
-        setCustomNames({});
-        setCustomDescriptions({});
-        setInputSchemas({});
-        setSchemaErrors({});
-    };
-
-    const allSelected = sequences.length > 0 && selectedIds.size === sequences.length;
-    const hasSchemaErrors = Array.from(selectedIds).some(id => schemaErrors[id]);
-
-    return (
-        <DialogOverlay onClick={onCancel}>
-            <DialogContent onClick={e => e.stopPropagation()}>
-                <DialogTitle>Add Tools from Sequences</DialogTitle>
-                <DialogField>
-                    <DialogLabel>Select Sequences ({selectedIds.size} of {sequences.length})</DialogLabel>
-                    {sequences.length === 0 ? (
-                        <EmptyMessage>No sequences found in the project</EmptyMessage>
-                    ) : (
-                        <SequencesList>
-                            <SelectAllRow>
-                                <SequenceCheckbox
-                                    type="checkbox"
-                                    checked={allSelected}
-                                    onChange={handleSelectAll}
-                                    id="select-all-sequences"
-                                />
-                                <SelectAllLabel htmlFor="select-all-sequences">
-                                    <strong>Select All</strong>
-                                </SelectAllLabel>
-                            </SelectAllRow>
-                            {sequences.map(seq => (
-                                <SequenceItem key={seq.id}>
-                                    <SequenceItemHeader>
-                                        <SequenceCheckbox
-                                            type="checkbox"
-                                            checked={selectedIds.has(seq.id)}
-                                            onChange={() => toggleSequence(seq.id)}
-                                            id={`seq-${seq.id}`}
-                                        />
-                                        <SequenceName>{seq.name}</SequenceName>
-                                    </SequenceItemHeader>
-                                    {selectedIds.has(seq.id) && (
-                                        <CustomInputsContainer>
-                                            <InputFieldLabel htmlFor={`name-${seq.id}`}>Tool name</InputFieldLabel>
-                                            <CustomInput
-                                                id={`name-${seq.id}`}
-                                                type="text"
-                                                placeholder={seq.name}
-                                                value={customNames[seq.id] || ''}
-                                                onChange={e => setCustomNames(prev => ({ ...prev, [seq.id]: e.target.value }))}
-                                                onClick={e => e.stopPropagation()}
-                                            />
-                                            <InputFieldLabel htmlFor={`desc-${seq.id}`}>Description</InputFieldLabel>
-                                            <CustomInput
-                                                id={`desc-${seq.id}`}
-                                                type="text"
-                                                placeholder="Describe what this tool does"
-                                                value={customDescriptions[seq.id] || ''}
-                                                onChange={e => setCustomDescriptions(prev => ({ ...prev, [seq.id]: e.target.value }))}
-                                                onClick={e => e.stopPropagation()}
-                                            />
-                                            <InputFieldLabel>Input Schema (JSON)</InputFieldLabel>
-                                            <SchemaRow>
-                                                <SchemaTextarea
-                                                    placeholder='e.g. {"amount": number, "name": string}'
-                                                    value={inputSchemas[seq.id] || ''}
-                                                    onChange={e => handleSchemaChange(seq.id, e.target.value)}
-                                                    onClick={e => e.stopPropagation()}
-                                                />
-                                                <SchemaImportBtn
-                                                    type="button"
-                                                    onClick={e => { e.stopPropagation(); handleImportFile(seq.id); }}
-                                                >
-                                                    Import JSON
-                                                </SchemaImportBtn>
-                                                <input
-                                                    ref={el => { fileInputRefs.current[seq.id] = el; }}
-                                                    type="file"
-                                                    accept=".json"
-                                                    style={{ display: 'none' }}
-                                                    onChange={e => handleFileChange(seq.id, e)}
-                                                />
-                                            </SchemaRow>
-                                            {schemaErrors[seq.id] && <SchemaError>{schemaErrors[seq.id]}</SchemaError>}
-                                        </CustomInputsContainer>
-                                    )}
-                                </SequenceItem>
-                            ))}
-                        </SequencesList>
-                    )}
-                </DialogField>
-                <DialogButtonGroup>
-                    <DialogCancelBtn onClick={onCancel}>Cancel</DialogCancelBtn>
-                    {selectedIds.size > 0 && (
-                        <SelectionInfo>{selectedIds.size} sequence{selectedIds.size !== 1 ? 's' : ''} selected</SelectionInfo>
-                    )}
-                    <DialogAddBtn onClick={handleConfirm} disabled={selectedIds.size === 0 || hasSchemaErrors}>
-                        Add Selected ({selectedIds.size})
-                    </DialogAddBtn>
-                </DialogButtonGroup>
-            </DialogContent>
-        </DialogOverlay>
-    );
-}
-
-//  Form Schema 
+// Form Schema
 
 const schema = yup.object({
     serverName: yup.string()
@@ -956,7 +298,7 @@ const schema = yup.object({
         .integer('Port must be an integer'),
 });
 
-//  Props
+// Props
 
 export interface MCPServerEditData {
     serverName: string;
@@ -977,13 +319,14 @@ export interface MCPServerEditData {
     }>;
 }
 
-export interface MCPServerFromAPIsFormProps {
+export interface MCPServerToolsFormProps {
     path: string;
     editData?: MCPServerEditData;
 }
 
-//  Main Form 
-export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormProps) {
+// Main Form
+
+export function MCPServerToolsForm({ path, editData }: MCPServerToolsFormProps) {
     const isEditMode = !!editData;
     const { rpcClient } = useVisualizerContext();
     const { register, handleSubmit, setValue, formState: { errors } } = useForm({
@@ -1002,7 +345,8 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
     const [showCreateScratchDialog, setShowCreateScratchDialog] = useState(false);
     const [showToolTypeSelector, setShowToolTypeSelector] = useState(false);
     const [selectedAPIForTool, setSelectedAPIForTool] = useState<string>('');
-    // ─── Auto-save helpers (edit mode only) ────────────────────────────────────
+
+    // Auto-save helpers (edit mode only)
 
     const saveToolsToLocalEntry = async (currentTools: UnifiedTool[]) => {
         if (!isEditMode || !editData?.localEntryPath) return;
@@ -1020,7 +364,7 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
                 directory: localEntriesDir,
                 name: `${editData.serverName}-mcp-config`,
                 type: 'In-Line XML Entry',
-                value: generateMixedLocalEntryXml(currentTools, inputSchemas),
+                value: generateToolsXml(currentTools, inputSchemas),
                 URL: '',
                 getContentOnly: false,
             });
@@ -1029,7 +373,8 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
         }
     };
 
-    // Load project structure (APIs + sequences) and, if editing, existing tools from XML
+    // Load project structure (APIs + sequences) and existing tools when editing
+
     useEffect(() => {
         const loadData = async () => {
             setLoading(true);
@@ -1070,7 +415,7 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
                     .filter(s => s.id !== '');
                 setSequences(parsedSeqs);
 
-                // If editing with a localEntryPath, load existing tools from XML
+                // Load existing tools from XML when editing
                 if (isEditMode && editData?.localEntryPath) {
                     const resp = await rpcClient.getMiDiagramRpcClient().readIdpSchemaFileContent({
                         filePath: editData.localEntryPath,
@@ -1079,7 +424,7 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
                         setTools(parseToolsFromXML(resp.fileContent));
                     }
 
-                    // Derive inbound endpoint path to read the port
+                    // Read port from inbound endpoint
                     const inboundPath = editData.localEntryPath
                         .replace('/local-entries/', '/inbound-endpoints/')
                         .replace('-mcp-config.xml', '-endpoint.xml');
@@ -1089,13 +434,10 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
                         });
                         if (inboundResp.fileContent) {
                             const port = parsePortFromInboundEndpoint(inboundResp.fileContent);
-                            if (port !== null) {
-                                setValue('port', port);
-                            }
+                            if (port !== null) setValue('port', port);
                         }
                     } catch {}
                 } else if (isEditMode && editData?.tools) {
-                    // Legacy: pre-parsed API tools from MCPServerList
                     setTools(editData.tools.map(t => ({ ...t, kind: 'api' as const })));
                 }
             } catch (err) {
@@ -1108,7 +450,7 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
         loadData();
     }, [rpcClient, path]);
 
-    //  Add API tools 
+    // Add API tools (From APIs path)
 
     const confirmAddAPITools = (
         apiId: string,
@@ -1148,7 +490,7 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
         setError(null);
     };
 
-    //  Add sequence tools 
+    // Add sequence tools (From Sequences path)
 
     const confirmAddSeqTools = (
         selected: Array<{ sequenceId: string; customName: string; description: string; inputSchema: string }>
@@ -1174,7 +516,7 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
         setError(null);
     };
 
-    //  Create scratch tool 
+    // Create new tool from scratch (New Tool path)
 
     const confirmAddScratchTool = async (data: ScratchToolData) => {
         try {
@@ -1230,7 +572,7 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
         saveToolsToLocalEntry(updatedTools);
     };
 
-    //  Submit 
+    // Submit
 
     const onSubmit = async (data: any) => {
         setSubmitting(true);
@@ -1254,13 +596,12 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
             );
 
             const localEntryName = `${data.serverName}-mcp-config`;
-            const localEntryXml = generateMixedLocalEntryXml(tools, inputSchemas);
 
             await rpcClient.getMiDiagramRpcClient().createLocalEntry({
                 directory: localEntriesDir,
                 name: localEntryName,
                 type: 'In-Line XML Entry',
-                value: localEntryXml,
+                value: generateToolsXml(tools, inputSchemas),
                 URL: '',
                 getContentOnly: false,
             });
@@ -1300,7 +641,7 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
         }
     };
 
-    //  Render 
+    // Render
 
     const title = isEditMode
         ? `Edit MCP Server: ${editData!.serverName}`
@@ -1509,7 +850,7 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
                     </Container>
                 )}
 
-                <AddToolDialog
+                <AddAPIToolDialog
                     isOpen={showAddAPIDialog}
                     apis={apis}
                     selectedAPIForTool={selectedAPIForTool}
@@ -1535,4 +876,4 @@ export function MCPServerFromAPIsForm({ path, editData }: MCPServerFromAPIsFormP
     );
 }
 
-export default MCPServerFromAPIsForm;
+export default MCPServerToolsForm;

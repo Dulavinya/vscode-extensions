@@ -59,8 +59,7 @@ import { DatamapperForm } from './views/Forms/DatamapperForm';
 import { DataMapperMigrationForm } from './views/Forms/DataMapperMigrationForm';
 import { ImportArtfactForm } from './views/Forms/ImportArtifactForm';
 import { MCPServerWizard } from './views/Forms/MCPServerForm';
-import { MCPServerFromAPIsForm } from './views/Forms/MCPServerForm/MCPServerFromAPIsForm';
-import { MCPServerFromSequencesForm } from './views/Forms/MCPServerForm/MCPServerFromSequencesForm';
+import { MCPServerToolsForm } from './views/Forms/MCPServerForm/MCPServerToolsForm';
 import { IdpConnectorSchemaGenerateForm }from './views/Forms/IDPConnectorForm/IdpConnectorSchemaGenerateForm';
 import { KubernetesConfigurationForm } from "./views/Forms/KubernetesConfigurationForm";
 import { RegistryPropertyForm } from "./views/Forms/RegistryPropertyForm";
@@ -342,10 +341,7 @@ const MainPanel = (props: MainPanelProps) => {
                 setViewComponent(<MCPServerWizard path={visualizerState.documentUri} forceCreate={visualizerState.customProps?.forceCreate} />);
                 break;
             case MACHINE_VIEW.MCPServerFromAPIsForm:
-                setViewComponent(<MCPServerFromAPIsForm path={visualizerState.documentUri} editData={visualizerState.customProps?.editData} />);
-                break;
-            case MACHINE_VIEW.MCPServerFromSequencesForm:
-                setViewComponent(<MCPServerFromSequencesForm path={visualizerState.documentUri} />);
+                setViewComponent(<MCPServerToolsForm path={visualizerState.documentUri} editData={visualizerState.customProps?.editData} />);
                 break;
             case MACHINE_VIEW.ImportArtifactForm:
                 setViewComponent(<ImportArtfactForm />);

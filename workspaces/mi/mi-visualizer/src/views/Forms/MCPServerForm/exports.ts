@@ -16,5 +16,8 @@
  * under the License.
  */
 export { default as MCPServerWizard } from './index';
-export { default as MCPServerFromAPIsForm } from './MCPServerFromAPIsForm';
-export { default as MCPServerFromSequencesForm } from './MCPServerFromSequencesForm';
+export { default as MCPServerToolsForm } from './MCPServerToolsForm';
+export { default as AddAPIToolDialog } from './AddAPIToolDialog';
+export { default as AddSequenceToolDialog } from './AddSequenceToolDialog';
+export { default as CreateScratchToolDialog } from './CreateScratchToolDialog';
+export type { UnifiedTool, APITool, SequenceTool, API, Sequence, APIOperation } from './types';

@@ -18,7 +18,7 @@
 
 import { ChangeEvent, useRef, useState } from 'react';
 import styled from '@emotion/styled';
-import { convertToJsonSchema } from './MCPServerFromAPIsForm';
+import { convertToJsonSchema } from './utils';
 
 // Styled Components 
 
@@ -177,6 +177,7 @@ interface CreateScratchToolDialogProps {
 export function CreateScratchToolDialog({ isOpen, onConfirm, onCancel }: CreateScratchToolDialogProps) {
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
+    const [descriptionError, setDescriptionError] = useState('');
     const [inputSchema, setInputSchema] = useState('');
     const [schemaError, setSchemaError] = useState('');
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -217,6 +218,10 @@ export function CreateScratchToolDialog({ isOpen, onConfirm, onCancel }: CreateS
 
     const handleConfirm = () => {
         if (!name.trim() || schemaError) return;
+        if (!description.trim()) {
+            setDescriptionError('Description is required.');
+            return;
+        }
         const emptySchema = JSON.stringify({ type: 'object', properties: {}, additionalProperties: false });
         onConfirm({
             name: name.trim(),
@@ -225,6 +230,7 @@ export function CreateScratchToolDialog({ isOpen, onConfirm, onCancel }: CreateS
         });
         setName('');
         setDescription('');
+        setDescriptionError('');
         setInputSchema('');
         setSchemaError('');
     };
@@ -251,13 +257,15 @@ export function CreateScratchToolDialog({ isOpen, onConfirm, onCancel }: CreateS
                 </DialogField>
 
                 <DialogField>
-                    <DialogLabel>Description</DialogLabel>
+                    <DialogLabel>Description *</DialogLabel>
                     <Input
                         type="text"
                         placeholder="Describe what this tool does"
                         value={description}
-                        onChange={e => setDescription(e.target.value)}
+                        onChange={e => { setDescription(e.target.value); if (e.target.value.trim()) setDescriptionError(''); }}
+                        onBlur={() => { if (!description.trim()) setDescriptionError('Description is required.'); }}
                     />
+                    {descriptionError && <SchemaError>{descriptionError}</SchemaError>}
                 </DialogField>
 
                 <DialogField>
@@ -284,7 +292,7 @@ export function CreateScratchToolDialog({ isOpen, onConfirm, onCancel }: CreateS
 
                 <DialogButtonGroup>
                     <CancelBtn onClick={onCancel}>Cancel</CancelBtn>
-                    <ConfirmBtn onClick={handleConfirm} disabled={!name.trim() || !!schemaError}>
+                    <ConfirmBtn onClick={handleConfirm} disabled={!name.trim() || !description.trim() || !!schemaError}>
                         Create Tool
                     </ConfirmBtn>
                 </DialogButtonGroup>
