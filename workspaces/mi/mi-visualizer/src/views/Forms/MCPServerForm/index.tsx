@@ -198,7 +198,7 @@ export function MCPServerWizard({ path }: MCPServerWizardProps) {
                 const ports = await getUsedInboundPorts(
                     inboundEndpoints.map(ep => ep.path),
                     async (filePath) => {
-                        const resp = await rpcClient.getMiDiagramRpcClient().readIdpSchemaFileContent({ filePath });
+                        const resp = await rpcClient.getMiDiagramRpcClient().readFileContent({ filePath });
                         return resp.fileContent ?? null;
                     }
                 );

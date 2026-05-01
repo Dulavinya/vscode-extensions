@@ -231,8 +231,8 @@ import {
     UpdateWsdlEndpointResponse,
     WriteContentToFileRequest,
     WriteIdpSchemaFileToRegistryRequest,
-    ReadIdpSchemaFileContentRequest,
-    ReadIdpSchemaFileContentResponse,
+    ReadFileContentRequest,
+    ReadFileContentResponse,
     WriteIdpSchemaFileToRegistryResponse,
     GetIdpSchemaFilesResponse,
     WriteContentToFileResponse,
@@ -3459,7 +3459,7 @@ ${endpointAttributes}
         });
     }
 
-    async readIdpSchemaFileContent(params: ReadIdpSchemaFileContentRequest): Promise<ReadIdpSchemaFileContentResponse> {
+    async readFileContent(params: ReadFileContentRequest): Promise<ReadFileContentResponse> {
         const { filePath } = params;
         const response = {
             fileContent: '',

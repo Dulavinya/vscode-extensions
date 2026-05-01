@@ -334,7 +334,7 @@ export function MCPServerToolsForm({ path, editData }: MCPServerToolsFormProps) 
             const apiDefDir = pathModule.join(projectDir, 'src', 'main', 'wso2mi', 'resources', 'api-definitions').toString();
             const apiTools = currentTools.filter((t): t is APITool => t.kind === 'api');
             const inputSchemas = await buildInputSchemasForAPITools(apiTools, apiDefDir, async (filePath) => {
-                const resp = await rpcClient.getMiDiagramRpcClient().readIdpSchemaFileContent({ filePath });
+                const resp = await rpcClient.getMiDiagramRpcClient().readFileContent({ filePath });
                 return resp.fileContent ?? null;
             });
             await rpcClient.getMiDiagramRpcClient().createLocalEntry({
@@ -403,7 +403,7 @@ export function MCPServerToolsForm({ path, editData }: MCPServerToolsFormProps) 
                 const ports = await getUsedInboundPorts(
                     inboundEPs.map(ep => ep.path),
                     async (filePath) => {
-                        const resp = await rpcClient.getMiDiagramRpcClient().readIdpSchemaFileContent({ filePath });
+                        const resp = await rpcClient.getMiDiagramRpcClient().readFileContent({ filePath });
                         return resp.fileContent ?? null;
                     },
                     currentInboundPath
@@ -412,7 +412,7 @@ export function MCPServerToolsForm({ path, editData }: MCPServerToolsFormProps) 
 
                 // Load existing tools from XML when editing
                 if (isEditMode && editData?.localEntryPath) {
-                    const resp = await rpcClient.getMiDiagramRpcClient().readIdpSchemaFileContent({
+                    const resp = await rpcClient.getMiDiagramRpcClient().readFileContent({
                         filePath: editData.localEntryPath,
                     });
                     if (resp.fileContent) {
@@ -424,7 +424,7 @@ export function MCPServerToolsForm({ path, editData }: MCPServerToolsFormProps) 
                         .replace('/local-entries/', '/inbound-endpoints/')
                         .replace('-mcp-config.xml', '-endpoint.xml');
                     try {
-                        const inboundResp = await rpcClient.getMiDiagramRpcClient().readIdpSchemaFileContent({
+                        const inboundResp = await rpcClient.getMiDiagramRpcClient().readFileContent({
                             filePath: inboundPath,
                         });
                         if (inboundResp.fileContent) {
@@ -589,7 +589,7 @@ export function MCPServerToolsForm({ path, editData }: MCPServerToolsFormProps) 
                 apiTools,
                 apiDefDir,
                 async (filePath) => {
-                    const resp = await rpcClient.getMiDiagramRpcClient().readIdpSchemaFileContent({ filePath });
+                    const resp = await rpcClient.getMiDiagramRpcClient().readFileContent({ filePath });
                     return resp.fileContent ?? null;
                 }
             );
