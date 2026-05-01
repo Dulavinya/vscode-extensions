@@ -20,4 +20,4 @@ export { default as MCPServerToolsForm } from './MCPServerToolsForm';
 export { default as AddAPIToolDialog } from './AddAPIToolDialog';
 export { default as AddSequenceToolDialog } from './AddSequenceToolDialog';
 export { default as CreateScratchToolDialog } from './CreateScratchToolDialog';
-export type { UnifiedTool, APITool, SequenceTool, API, Sequence, APIOperation } from './types';
+export type { UnifiedTool, APITool, SequenceTool, API, Sequence, APIOperation } from '@wso2/mi-core';

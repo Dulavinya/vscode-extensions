@@ -19,7 +19,7 @@
 import { ChangeEvent, useRef, useState } from 'react';
 import styled from '@emotion/styled';
 import { convertToJsonSchema } from './utils';
-import { Sequence } from './types';
+import { Sequence } from '@wso2/mi-core';
 import { useVisualizerContext } from '@wso2/mi-rpc-client';
 
 // Styled Components

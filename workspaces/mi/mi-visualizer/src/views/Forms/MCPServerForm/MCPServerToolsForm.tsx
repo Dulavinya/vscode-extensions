@@ -27,7 +27,7 @@ import { EVENT_TYPE, MACHINE_VIEW } from '@wso2/mi-core';
 import { View, ViewContent, ViewHeader } from '../../../components/View';
 import * as pathModule from 'path';
 
-import { API, APITool, Sequence, SequenceTool, UnifiedTool } from './types';
+import { API, APITool, Sequence, SequenceTool, UnifiedTool } from '@wso2/mi-core';
 import {
     artifactParserConfig,
     buildInputSchemasForAPITools,

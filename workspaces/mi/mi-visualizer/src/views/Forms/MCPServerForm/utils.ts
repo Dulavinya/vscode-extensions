@@ -18,7 +18,7 @@
 
 import * as pathModule from 'path';
 import * as yaml from 'yaml';
-import { APIOperation, APITool, UnifiedTool } from './types';
+import { APIOperation, APITool, UnifiedTool } from '@wso2/mi-core';
 
 export function cleanPathForToolName(path: string): string {
     return path
