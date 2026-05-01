@@ -140,6 +140,25 @@ export function parsePortFromInboundEndpoint(xmlContent: string): number | null 
     return null;
 }
 
+export async function getUsedInboundPorts(
+    inboundEndpointPaths: string[],
+    readFile: (path: string) => Promise<string | null>,
+    excludePath?: string
+): Promise<Set<number>> {
+    const usedPorts = new Set<number>();
+    for (const epPath of inboundEndpointPaths) {
+        if (excludePath && epPath === excludePath) continue;
+        try {
+            const content = await readFile(epPath);
+            if (content) {
+                const port = parsePortFromInboundEndpoint(content);
+                if (port !== null) usedPorts.add(port);
+            }
+        } catch {}
+    }
+    return usedPorts;
+}
+
 export function generateToolsXml(tools: UnifiedTool[], inputSchemas: Record<string, object>): string {
     let toolsXml = '';
 

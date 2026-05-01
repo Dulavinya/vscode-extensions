@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import styled from '@emotion/styled';
 import { TextField, Button, FormView, FormActions } from '@wso2/ui-toolkit';
 import { useForm } from 'react-hook-form';
@@ -25,6 +25,7 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import { MACHINE_VIEW, EVENT_TYPE } from '@wso2/mi-core';
 import { useVisualizerContext } from '@wso2/mi-rpc-client';
 import * as pathModule from 'path';
+import { getUsedInboundPorts } from './utils';
 
 const ErrorMessage = styled.div`
     color: var(--vscode-inputValidation-errorBorder);
@@ -53,12 +54,36 @@ export interface MCPServerWizardProps {
 
 export function MCPServerWizard({ path }: MCPServerWizardProps) {
     const { rpcClient } = useVisualizerContext();
-    const { register, handleSubmit, formState: { errors } } = useForm({
+    const { register, handleSubmit, setError: setFieldError, formState: { errors } } = useForm({
         resolver: yupResolver(schema),
         defaultValues: { serverName: '', port: 8300 },
     });
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [usedPorts, setUsedPorts] = useState<Set<number>>(new Set());
+
+    useEffect(() => {
+        const loadUsedPorts = async () => {
+            try {
+                const projectRootResp = await rpcClient.getMiDiagramRpcClient().getProjectRoot({ path });
+                const projectDir = projectRootResp.path;
+                const projectStructure = await rpcClient.getMiVisualizerRpcClient().getProjectStructure({
+                    documentUri: projectDir,
+                });
+                const inboundEndpoints: Array<{ path: string }> =
+                    projectStructure?.directoryMap?.src?.main?.wso2mi?.artifacts?.inboundEndpoints || [];
+                const ports = await getUsedInboundPorts(
+                    inboundEndpoints.map(ep => ep.path),
+                    async (filePath) => {
+                        const resp = await rpcClient.getMiDiagramRpcClient().readIdpSchemaFileContent({ filePath });
+                        return resp.fileContent ?? null;
+                    }
+                );
+                setUsedPorts(ports);
+            } catch {}
+        };
+        loadUsedPorts();
+    }, [rpcClient, path]);
 
     const handleClose = () => {
         rpcClient.getMiVisualizerRpcClient().openView({
@@ -68,6 +93,10 @@ export function MCPServerWizard({ path }: MCPServerWizardProps) {
     };
 
     const onSubmit = async (data: any) => {
+        if (usedPorts.has(Number(data.port))) {
+            setFieldError('port', { message: `Port ${data.port} is already in use by another inbound endpoint in this project` });
+            return;
+        }
         setSubmitting(true);
         setError(null);
         try {

@@ -33,6 +33,7 @@ import {
     buildInputSchemasForAPITools,
     cleanPathForToolName,
     generateToolsXml,
+    getUsedInboundPorts,
     parsePortFromInboundEndpoint,
     parseToolsFromXML,
 } from './utils';
@@ -304,7 +305,7 @@ export interface MCPServerToolsFormProps {
 export function MCPServerToolsForm({ path, editData }: MCPServerToolsFormProps) {
     const isEditMode = !!editData;
     const { rpcClient } = useVisualizerContext();
-    const { register, handleSubmit, setValue, formState: { errors } } = useForm({
+    const { register, handleSubmit, setValue, setError: setFieldError, formState: { errors } } = useForm({
         resolver: yupResolver(schema),
         defaultValues: { serverName: editData?.serverName ?? '', port: 8300 },
     });
@@ -315,6 +316,7 @@ export function MCPServerToolsForm({ path, editData }: MCPServerToolsFormProps) 
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [usedPorts, setUsedPorts] = useState<Set<number>>(new Set());
     const [showAddAPIDialog, setShowAddAPIDialog] = useState(false);
     const [showAddSeqDialog, setShowAddSeqDialog] = useState(false);
     const [showCreateScratchDialog, setShowCreateScratchDialog] = useState(false);
@@ -389,6 +391,24 @@ export function MCPServerToolsForm({ path, editData }: MCPServerToolsFormProps) 
                     }))
                     .filter(s => s.id !== '');
                 setSequences(parsedSeqs);
+
+                // Collect used ports from all inbound endpoints (exclude current server in edit mode)
+                const inboundEPs: Array<{ path: string }> =
+                    projectStructure?.directoryMap?.src?.main?.wso2mi?.artifacts?.inboundEndpoints || [];
+                const currentInboundPath = isEditMode && editData?.localEntryPath
+                    ? editData.localEntryPath
+                        .replace('/local-entries/', '/inbound-endpoints/')
+                        .replace('-mcp-config.xml', '-endpoint.xml')
+                    : undefined;
+                const ports = await getUsedInboundPorts(
+                    inboundEPs.map(ep => ep.path),
+                    async (filePath) => {
+                        const resp = await rpcClient.getMiDiagramRpcClient().readIdpSchemaFileContent({ filePath });
+                        return resp.fileContent ?? null;
+                    },
+                    currentInboundPath
+                );
+                setUsedPorts(ports);
 
                 // Load existing tools from XML when editing
                 if (isEditMode && editData?.localEntryPath) {
@@ -550,6 +570,10 @@ export function MCPServerToolsForm({ path, editData }: MCPServerToolsFormProps) 
     // Submit
 
     const onSubmit = async (data: any) => {
+        if (usedPorts.has(Number(data.port))) {
+            setFieldError('port', { message: `Port ${data.port} is already in use by another inbound endpoint in this project` });
+            return;
+        }
         setSubmitting(true);
         setError(null);
         try {
