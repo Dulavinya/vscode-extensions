@@ -164,17 +164,10 @@ const OperationMethodRow = styled.div`
     align-items: center;
 `;
 
-const OperationMethod = styled.span<{ method: string }>`
+const OperationMethod = styled.span`
     font-weight: 600;
     font-size: 11px;
-    padding: 2px 6px;
-    border-radius: 2px;
-    background: ${(props: { method: string }) => {
-        const methods: Record<string, string> = { GET: '#61affe', POST: '#49cc90', PUT: '#fca130', DELETE: '#f93e3e', PATCH: '#50e3c2' };
-        return methods[props.method] || '#999';
-    }};
-    color: white;
-    width: fit-content;
+    color: var(--vscode-descriptionForeground);
 `;
 
 const OperationPath = styled.span`
@@ -435,7 +428,7 @@ export function AddAPIToolDialog({
                                             />
                                             <OperationDetails>
                                                 <OperationMethodRow>
-                                                    <OperationMethod method={op.method}>
+                                                    <OperationMethod>
                                                         {op.method}
                                                     </OperationMethod>
                                                     <OperationPath>{op.path}</OperationPath>

@@ -180,18 +180,15 @@ export async function buildInputSchemasForAPITools(
     apiDefDir: string,
     readFile: (filePath: string) => Promise<string | null>
 ): Promise<Record<string, object>> {
-    const yamlCache: Record<string, any> = {};
     const inputSchemas: Record<string, object> = {};
 
     const readYaml = async (filePath: string): Promise<any> => {
-        if (Object.prototype.hasOwnProperty.call(yamlCache, filePath)) return yamlCache[filePath];
         try {
             const content = await readFile(filePath);
-            yamlCache[filePath] = content ? yaml.parse(content) : null;
+            return content ? yaml.parse(content) : null;
         } catch {
-            yamlCache[filePath] = null;
+            return null;
         }
-        return yamlCache[filePath];
     };
 
     for (const tool of tools) {

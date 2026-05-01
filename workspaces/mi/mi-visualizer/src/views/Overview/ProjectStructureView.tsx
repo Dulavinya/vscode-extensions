@@ -281,31 +281,6 @@ const ProjectStructureView = (props: { projectStructure: any, workspaceDir: stri
         rpcClient.getMiDiagramRpcClient().markAsDefaultSequence({ path, remove });
     }
 
-    const openMCPServer = (entry: any) => {
-        const serverName = (entry.name as string)
-            .replace(/-mcp-config\.xml$/, '')
-            .replace(/-mcp-config$/, '');
-        rpcClient.getMiVisualizerRpcClient().openView({
-            type: EVENT_TYPE.OPEN_VIEW,
-            location: {
-                view: MACHINE_VIEW.MCPServerFromAPIsForm,
-                documentUri: entry.path,
-                customProps: {
-                    editData: { serverName, localEntryPath: entry.path },
-                },
-            },
-        });
-    };
-
-    const deleteMCPServer = (entry: any) => {
-        const inboundPath = (entry.path as string)
-            .replace('/local-entries/', '/inbound-endpoints/')
-            .replace('-mcp-config.xml', '-endpoint.xml')
-            .replace(/-mcp-config$/, '-endpoint');
-        rpcClient.getMiDiagramRpcClient().deleteArtifact({ path: entry.path, enableUndo: true });
-        rpcClient.getMiDiagramRpcClient().deleteArtifact({ path: inboundPath, enableUndo: true });
-    };
-
     const ifHasEntries = () => {
         const artifacts = projectStructure.directoryMap.src.main.wso2mi.artifacts;
         if (artifacts) {
@@ -355,12 +330,6 @@ const ProjectStructureView = (props: { projectStructure: any, workspaceDir: stri
         });
     }
 
-    const isMcpEntry = (e: any) =>
-        e.name?.endsWith('-mcp-config') || e.name?.endsWith('-mcp-config.xml');
-    const allLocalEntries: any[] =
-        projectStructure?.directoryMap?.src?.main?.wso2mi?.artifacts?.localEntries || [];
-    const mcpLocalEntries = allLocalEntries.filter(isMcpEntry);
-
     return (
         <Fragment>
             {/* If has entries render content*/}
@@ -369,41 +338,26 @@ const ProjectStructureView = (props: { projectStructure: any, workspaceDir: stri
                     {Object.entries(projectStructure.directoryMap.src.main.wso2mi.artifacts)
                         .filter(([key, value]) => artifactTypeMap.hasOwnProperty(key) && Array.isArray(value) && value.length > 0)
                         .map(([key, value]) => {
-                            // Hide MCP config local entries from the Local Entries section
-                            const mcpEndpointNames = new Set(
-                                mcpLocalEntries.map((e: any) =>
-                                    (e.name as string)
-                                        .replace(/-mcp-config\.xml$/, '')
-                                        .replace(/-mcp-config$/, '') + '-endpoint'
-                                ).flatMap(n => [n, n + '.xml'])
-                            );
-                            const effectiveValue = key === 'localEntries'
-                                ? (value as any[]).filter((e: any) => !isMcpEntry(e))
-                                : key === 'inboundEndpoints'
-                                    ? (value as any[]).filter((e: any) => !mcpEndpointNames.has(e.name))
-                                    : value as any[];
-                            if (effectiveValue.length === 0) return null;
-
-                            const hasOnlyUndefinedItems = Object.values(effectiveValue).every((entry: any) => entry.path === undefined);
-                            const hasConnections = hasOnlyUndefinedItems ? checkHasConnections(effectiveValue) : false;
+                            const hasOnlyUndefinedItems = Object.values(value).every(entry => entry.path === undefined);
+                            const hasConnections = hasOnlyUndefinedItems ? checkHasConnections(value) : false;
                             return (!hasOnlyUndefinedItems || hasConnections) && (
-                                <div key={key}>
+                                <div>
                                     <h3>{artifactTypeMap[key].title}</h3>
-                                    {Object.entries(effectiveValue).map(([_, entry]) => (
-                                        (entry as any).path && (
+                                    {Object.entries(value).map(([_, entry]) => (
+                                        entry.path && (
                                             <Entry
-                                                key={(entry as any).name}
+                                                key={entry.name}
                                                 isCodicon={artifactTypeMap[key].isCodicon}
-                                                icon={getIcon((entry as any).type, (entry as any).subType, artifactTypeMap[key].icon, (entry as any).connectorName)}
+                                                icon={getIcon(entry.type, entry.subType, artifactTypeMap[key].icon, entry.connectorName)}
                                                 iconSx={artifactTypeMap[key].iconSx}
-                                                name={(entry as any).name}
+                                                name={entry.name}
                                                 description={artifactTypeMap[key].description(entry)}
-                                                onClick={() => goToView(artifactTypeMap[key].path(entry), artifactTypeMap[key].view, (entry as any).name)}
-                                                goToView={() => goToView(artifactTypeMap[key].path(entry), artifactTypeMap[key].view, (entry as any).name)}
+                                                onClick={() => goToView(artifactTypeMap[key].path(entry), artifactTypeMap[key].view, entry.name)}
+                                                goToView={() => goToView(artifactTypeMap[key].path(entry), artifactTypeMap[key].view, entry.name)}
                                                 goToSource={() => goToSource(artifactTypeMap[key].path(entry))}
                                                 deleteArtifact={() => deleteArtifact(artifactTypeMap[key].path(entry))}
-                                                isMainSequence={(entry as any).isMainSequence}
-                                                markAsDefaultSequence={artifactTypeMap[key].title == "Sequences" ? () => markAsDefaultSequence(artifactTypeMap[key].path(entry), (entry as any).isMainSequence) : undefined}
+                                                isMainSequence={entry.isMainSequence}
+                                                markAsDefaultSequence={artifactTypeMap[key].title == "Sequences" ? () => markAsDefaultSequence(artifactTypeMap[key].path(entry), entry.isMainSequence) : undefined}
                                             />
                                         )
                                     ))}
@@ -411,31 +365,6 @@ const ProjectStructureView = (props: { projectStructure: any, workspaceDir: stri
                             );
                         })
                     }
-
-                    {/* MCP Servers section — derived from local entries ending with -mcp-config */}
-                    {mcpLocalEntries.length > 0 && (
-                        <div>
-                            <h3>MCP Servers</h3>
-                            {mcpLocalEntries.map((entry: any) => {
-                                const serverName = (entry.name as string)
-                                    .replace(/-mcp-config\.xml$/, '')
-                                    .replace(/-mcp-config$/, '');
-                                return entry.path && (
-                                    <Entry
-                                        key={serverName}
-                                        isCodicon
-                                        icon="server"
-                                        name={serverName}
-                                        description="MCP Server"
-                                        onClick={() => openMCPServer(entry)}
-                                        goToView={() => openMCPServer(entry)}
-                                        goToSource={() => goToSource(entry.path)}
-                                        deleteArtifact={() => deleteMCPServer(entry)}
-                                    />
-                                );
-                            })}
-                        </div>
-                    )}
                 </>
             }
             {/* else render message */}

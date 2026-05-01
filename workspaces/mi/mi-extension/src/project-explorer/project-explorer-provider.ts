@@ -426,43 +426,7 @@ function generateArtifacts(
 				break;
 			}
 			case 'Local Entries': {
-				const isMcpLocalEntry = (entry: any) =>
-					entry.name?.endsWith('-mcp-config') || entry.name?.endsWith('-mcp-config.xml');
-				const mcpEntries = data[key].filter(isMcpLocalEntry);
-				const regularEntries = data[key].filter((e: any) => !isMcpLocalEntry(e));
-
-				if (mcpEntries.length > 0) {
-					const mcpParent = new ProjectExplorerEntry(
-						'MCP Servers',
-						isCollapsibleState(true),
-						mcpEntries
-					);
-					mcpParent.contextValue = 'mcpServers';
-					mcpParent.children = mcpEntries.map((entry: any) => {
-						const serverName = (entry.name as string)
-							.replace(/-mcp-config\.xml$/, '')
-							.replace(/-mcp-config$/, '');
-						const explorerEntry = new ProjectExplorerEntry(
-							serverName,
-							isCollapsibleState(false),
-							entry,
-							'server',
-							true
-						);
-						explorerEntry.contextValue = 'mcpServer';
-						explorerEntry.command = {
-							title: "Show MCP Server",
-							command: COMMANDS.SHOW_MCP_SERVER_COMMAND,
-							arguments: [vscode.Uri.file(entry.path), serverName, false]
-						};
-						return explorerEntry;
-					});
-					result.push(mcpParent);
-				}
-
-				if (regularEntries.length === 0) continue;
-
-				parentEntry.children = regularEntries.map((entry: any) => {
+				parentEntry.children = data[key].map((entry: any) => {
 					const icon = entry.isRegistryResource ? 'file-code' : 'local-entry';
 					const explorerEntry = new ProjectExplorerEntry(
 						entry.name.replace(".xml", ""),

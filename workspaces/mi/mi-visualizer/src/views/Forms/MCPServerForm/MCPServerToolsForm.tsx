@@ -100,31 +100,6 @@ const ToolDescription = styled.span`
     color: var(--vscode-descriptionForeground);
 `;
 
-const MethodBadge = styled.span<{ method: string }>`
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-size: 11px;
-    font-weight: 600;
-    background: ${(props: any) => {
-        const m = props.method?.toUpperCase() || '';
-        const colors: any = { GET: '#61affe', POST: '#49cc90', PUT: '#fca130', DELETE: '#f93e3e', PATCH: '#50e3c2' };
-        return colors[m] || '#999';
-    }};
-    color: white;
-    min-width: 45px;
-    text-align: center;
-`;
-
-const SeqBadge = styled.span`
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-size: 11px;
-    font-weight: 600;
-    background: #7c4dff;
-    color: white;
-    min-width: 60px;
-    text-align: center;
-`;
 
 const ToolsList = styled.div`
     display: flex;
@@ -152,12 +127,12 @@ const ToolMeta = styled.span`
 const RemoveBtn = styled.button`
     padding: 4px 8px;
     font-size: 11px;
-    background: var(--vscode-errorForeground);
-    color: white;
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
     border: none;
     border-radius: 3px;
     cursor: pointer;
-    &:hover { opacity: 0.8; }
+    &:hover { background: var(--vscode-button-secondaryHoverBackground); }
 `;
 
 const EmptyMessage = styled.div`
@@ -643,10 +618,6 @@ export function MCPServerToolsForm({ path, editData }: MCPServerToolsFormProps) 
 
     // Render
 
-    const title = isEditMode
-        ? `Edit MCP Server: ${editData!.serverName}`
-        : 'Create MCP Server from APIs';
-
     return (
         <View>
             <ViewHeader
@@ -713,7 +684,6 @@ export function MCPServerToolsForm({ path, editData }: MCPServerToolsFormProps) 
                 ) : (
                     <Container>
                         <div>
-                            <Title>{title}</Title>
                             <Description>
                                 {isEditMode
                                     ? 'Add or remove tools from this MCP server. Tools can be backed by API operations or sequences.'
@@ -799,15 +769,11 @@ export function MCPServerToolsForm({ path, editData }: MCPServerToolsFormProps) 
                                                 </ToolInfo>
                                                 {tool.kind === 'api' ? (
                                                     <ToolMeta>
-                                                        <MethodBadge method={tool.operationMethod} style={{ marginRight: '4px' }}>
-                                                            {tool.operationMethod}
-                                                        </MethodBadge>
-                                                        {tool.operationPath} ({tool.apiName})
+                                                        {tool.operationMethod} {tool.operationPath} ({tool.apiName})
                                                     </ToolMeta>
                                                 ) : (
                                                     <ToolMeta>
-                                                        <SeqBadge style={{ marginRight: '4px' }}>SEQUENCE</SeqBadge>
-                                                        {tool.sequenceName}
+                                                        SEQUENCE · {tool.sequenceName}
                                                     </ToolMeta>
                                                 )}
                                                 <RemoveBtn
