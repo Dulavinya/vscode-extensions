@@ -20,6 +20,7 @@ import { ChangeEvent, useRef, useState } from 'react';
 import styled from '@emotion/styled';
 import { convertToJsonSchema } from './utils';
 import { Sequence } from './types';
+import { useVisualizerContext } from '@wso2/mi-rpc-client';
 
 // Styled Components
 
@@ -180,6 +181,25 @@ const SchemaError = styled.span`
     font-size: 11px;
 `;
 
+const FillAIBtn = styled.button`
+    padding: 4px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+    border: 1px solid var(--vscode-button-background);
+    border-radius: 3px;
+    cursor: pointer;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    &:hover { background: var(--vscode-button-hoverBackground); }
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+`;
+
+const DescriptionRow = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 6px;
+`;
+
 const EmptyMessage = styled.div`
     color: var(--vscode-descriptionForeground);
     text-align: center;
@@ -234,13 +254,46 @@ export interface AddSequenceToolDialogProps {
 }
 
 export function AddSequenceToolDialog({ isOpen, sequences, onConfirm, onCancel }: AddSequenceToolDialogProps) {
+    const { rpcClient } = useVisualizerContext();
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [customNames, setCustomNames] = useState<Record<string, string>>({});
     const [customDescriptions, setCustomDescriptions] = useState<Record<string, string>>({});
     const [descriptionErrors, setDescriptionErrors] = useState<Record<string, string>>({});
     const [inputSchemas, setInputSchemas] = useState<Record<string, string>>({});
     const [schemaErrors, setSchemaErrors] = useState<Record<string, string>>({});
+    const [aiDescLoadingIds, setAiDescLoadingIds] = useState<Set<string>>(new Set());
+    const [aiSchemaLoadingIds, setAiSchemaLoadingIds] = useState<Set<string>>(new Set());
     const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+    const handleFillDescription = async (seq: Sequence) => {
+        setAiDescLoadingIds(prev => new Set(prev).add(seq.id));
+        try {
+            const result = await rpcClient.getMiVisualizerRpcClient().getMcpToolSuggestion({
+                toolName: customNames[seq.id]?.trim() || seq.name,
+            });
+            if (result.description) {
+                setCustomDescriptions(prev => ({ ...prev, [seq.id]: result.description }));
+                setDescriptionErrors(prev => { const n = { ...prev }; delete n[seq.id]; return n; });
+            }
+        } finally {
+            setAiDescLoadingIds(prev => { const n = new Set(prev); n.delete(seq.id); return n; });
+        }
+    };
+
+    const handleFillSchema = async (seq: Sequence) => {
+        setAiSchemaLoadingIds(prev => new Set(prev).add(seq.id));
+        try {
+            const result = await rpcClient.getMiVisualizerRpcClient().getMcpToolSuggestion({
+                toolName: customNames[seq.id]?.trim() || seq.name,
+            });
+            if (result.inputSchema) {
+                setInputSchemas(prev => ({ ...prev, [seq.id]: result.inputSchema }));
+                validateSchema(seq.id, result.inputSchema);
+            }
+        } finally {
+            setAiSchemaLoadingIds(prev => { const n = new Set(prev); n.delete(seq.id); return n; });
+        }
+    };
 
     if (!isOpen) return null;
 
@@ -371,19 +424,28 @@ export function AddSequenceToolDialog({ isOpen, sequences, onConfirm, onCancel }
                                                 onClick={e => e.stopPropagation()}
                                             />
                                             <InputFieldLabel htmlFor={`desc-${seq.id}`}>Description *</InputFieldLabel>
-                                            <CustomInput
-                                                id={`desc-${seq.id}`}
-                                                type="text"
-                                                placeholder="Describe what this tool does"
-                                                value={customDescriptions[seq.id] || ''}
-                                                onChange={e => {
-                                                    const val = e.target.value;
-                                                    setCustomDescriptions(prev => ({ ...prev, [seq.id]: val }));
-                                                    if (val.trim()) setDescriptionErrors(prev => { const n = { ...prev }; delete n[seq.id]; return n; });
-                                                }}
-                                                onBlur={() => { if (!customDescriptions[seq.id]?.trim()) setDescriptionErrors(prev => ({ ...prev, [seq.id]: 'Description is required.' })); }}
-                                                onClick={e => e.stopPropagation()}
-                                            />
+                                            <DescriptionRow>
+                                                <CustomInput
+                                                    id={`desc-${seq.id}`}
+                                                    type="text"
+                                                    placeholder="Describe what this tool does"
+                                                    value={customDescriptions[seq.id] || ''}
+                                                    onChange={e => {
+                                                        const val = e.target.value;
+                                                        setCustomDescriptions(prev => ({ ...prev, [seq.id]: val }));
+                                                        if (val.trim()) setDescriptionErrors(prev => { const n = { ...prev }; delete n[seq.id]; return n; });
+                                                    }}
+                                                    onBlur={() => { if (!customDescriptions[seq.id]?.trim()) setDescriptionErrors(prev => ({ ...prev, [seq.id]: 'Description is required.' })); }}
+                                                    onClick={e => e.stopPropagation()}
+                                                />
+                                                <FillAIBtn
+                                                    type="button"
+                                                    disabled={aiDescLoadingIds.has(seq.id)}
+                                                    onClick={e => { e.stopPropagation(); handleFillDescription(seq); }}
+                                                >
+                                                    {aiDescLoadingIds.has(seq.id) ? 'Filling...' : 'Fill With AI'}
+                                                </FillAIBtn>
+                                            </DescriptionRow>
                                             {descriptionErrors[seq.id] && <SchemaError>{descriptionErrors[seq.id]}</SchemaError>}
                                             <InputFieldLabel>Input Schema (JSON)</InputFieldLabel>
                                             <SchemaRow>
@@ -393,6 +455,13 @@ export function AddSequenceToolDialog({ isOpen, sequences, onConfirm, onCancel }
                                                     onChange={e => handleSchemaChange(seq.id, e.target.value)}
                                                     onClick={e => e.stopPropagation()}
                                                 />
+                                                <FillAIBtn
+                                                    type="button"
+                                                    disabled={aiSchemaLoadingIds.has(seq.id)}
+                                                    onClick={e => { e.stopPropagation(); handleFillSchema(seq); }}
+                                                >
+                                                    {aiSchemaLoadingIds.has(seq.id) ? 'Filling...' : 'Fill With AI'}
+                                                </FillAIBtn>
                                                 <SchemaImportBtn
                                                     type="button"
                                                     onClick={e => { e.stopPropagation(); handleImportFile(seq.id); }}

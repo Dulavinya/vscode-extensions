@@ -495,3 +495,15 @@ export interface UpdateAiDependenciesResponse {
 export interface ReloadDependenciesRequest {
     newDependencies: DependencyDetails[];
 }
+
+export interface McpToolSuggestionRequest {
+    toolName: string;
+    operationMethod?: string;
+    operationPath?: string;
+    operationSummary?: string;
+}
+
+export interface McpToolSuggestionResponse {
+    description: string;
+    inputSchema: string;
+}

@@ -19,6 +19,7 @@
 import { ChangeEvent, useRef, useState } from 'react';
 import styled from '@emotion/styled';
 import { convertToJsonSchema } from './utils';
+import { useVisualizerContext } from '@wso2/mi-rpc-client';
 
 // Styled Components 
 
@@ -117,6 +118,19 @@ const SchemaImportBtn = styled.button`
     &:hover { background: var(--vscode-button-secondaryHoverBackground); }
 `;
 
+const FillAIBtn = styled.button`
+    padding: 4px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+    border: 1px solid var(--vscode-button-background);
+    border-radius: 3px;
+    cursor: pointer;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    &:hover { background: var(--vscode-button-hoverBackground); }
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+`;
+
 const SchemaError = styled.span`
     color: var(--vscode-inputValidation-errorForeground, var(--vscode-errorForeground));
     font-size: 11px;
@@ -175,12 +189,40 @@ interface CreateScratchToolDialogProps {
 }
 
 export function CreateScratchToolDialog({ isOpen, onConfirm, onCancel }: CreateScratchToolDialogProps) {
+    const { rpcClient } = useVisualizerContext();
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [descriptionError, setDescriptionError] = useState('');
     const [inputSchema, setInputSchema] = useState('');
     const [schemaError, setSchemaError] = useState('');
+    const [aiDescLoading, setAiDescLoading] = useState(false);
+    const [aiSchemaLoading, setAiSchemaLoading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+    const handleFillDescription = async () => {
+        if (!name.trim()) return;
+        setAiDescLoading(true);
+        try {
+            const result = await rpcClient.getMiVisualizerRpcClient().getMcpToolSuggestion({ toolName: name.trim() });
+            if (result.description) { setDescription(result.description); setDescriptionError(''); }
+        } finally {
+            setAiDescLoading(false);
+        }
+    };
+
+    const handleFillSchema = async () => {
+        if (!name.trim()) return;
+        setAiSchemaLoading(true);
+        try {
+            const result = await rpcClient.getMiVisualizerRpcClient().getMcpToolSuggestion({ toolName: name.trim() });
+            if (result.inputSchema) {
+                setInputSchema(result.inputSchema);
+                validateSchema(result.inputSchema);
+            }
+        } finally {
+            setAiSchemaLoading(false);
+        }
+    };
 
     if (!isOpen) return null;
 
@@ -258,13 +300,18 @@ export function CreateScratchToolDialog({ isOpen, onConfirm, onCancel }: CreateS
 
                 <DialogField>
                     <DialogLabel>Description *</DialogLabel>
-                    <Input
-                        type="text"
-                        placeholder="Describe what this tool does"
-                        value={description}
-                        onChange={e => { setDescription(e.target.value); if (e.target.value.trim()) setDescriptionError(''); }}
-                        onBlur={() => { if (!description.trim()) setDescriptionError('Description is required.'); }}
-                    />
+                    <SchemaRow>
+                        <Input
+                            type="text"
+                            placeholder="Describe what this tool does"
+                            value={description}
+                            onChange={e => { setDescription(e.target.value); if (e.target.value.trim()) setDescriptionError(''); }}
+                            onBlur={() => { if (!description.trim()) setDescriptionError('Description is required.'); }}
+                        />
+                        <FillAIBtn type="button" onClick={handleFillDescription} disabled={!name.trim() || aiDescLoading}>
+                            {aiDescLoading ? 'Filling...' : 'Fill With AI'}
+                        </FillAIBtn>
+                    </SchemaRow>
                     {descriptionError && <SchemaError>{descriptionError}</SchemaError>}
                 </DialogField>
 
@@ -276,6 +323,9 @@ export function CreateScratchToolDialog({ isOpen, onConfirm, onCancel }: CreateS
                             value={inputSchema}
                             onChange={e => handleSchemaChange(e.target.value)}
                         />
+                        <FillAIBtn type="button" onClick={handleFillSchema} disabled={!name.trim() || aiSchemaLoading}>
+                            {aiSchemaLoading ? 'Filling...' : 'Fill With AI'}
+                        </FillAIBtn>
                         <SchemaImportBtn type="button" onClick={() => fileInputRef.current?.click()}>
                             Import JSON
                         </SchemaImportBtn>

@@ -18,6 +18,7 @@
 
 import React, { useState } from 'react';
 import styled from '@emotion/styled';
+import { useVisualizerContext } from '@wso2/mi-rpc-client';
 
 interface APIOperation {
     id: string;
@@ -284,6 +285,25 @@ const InputError = styled.span`
     font-size: 11px;
 `;
 
+const FillAIBtn = styled.button`
+    padding: 4px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+    border: 1px solid var(--vscode-button-background);
+    border-radius: 3px;
+    cursor: pointer;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    &:hover { background: var(--vscode-button-hoverBackground); }
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+`;
+
+const DescriptionRow = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 6px;
+`;
+
 export function AddAPIToolDialog({
     isOpen,
     apis,
@@ -292,10 +312,30 @@ export function AddAPIToolDialog({
     onConfirmBulk,
     onCancel,
 }: AddAPIToolDialogProps) {
+    const { rpcClient } = useVisualizerContext();
     const [selectedOperationIds, setSelectedOperationIds] = useState<Set<string>>(new Set());
     const [customNames, setCustomNames] = useState<Record<string, string>>({});
     const [customDescriptions, setCustomDescriptions] = useState<Record<string, string>>({});
     const [descriptionErrors, setDescriptionErrors] = useState<Record<string, string>>({});
+    const [aiLoadingIds, setAiLoadingIds] = useState<Set<string>>(new Set());
+
+    const handleFillWithAI = async (op: APIOperation) => {
+        setAiLoadingIds(prev => new Set(prev).add(op.id));
+        try {
+            const result = await rpcClient.getMiVisualizerRpcClient().getMcpToolSuggestion({
+                toolName: customNames[op.id] || getDefaultName(op),
+                operationMethod: op.method,
+                operationPath: op.path,
+                operationSummary: op.summary,
+            });
+            if (result.description) {
+                setCustomDescriptions(prev => ({ ...prev, [op.id]: result.description }));
+                setDescriptionErrors(prev => { const n = { ...prev }; delete n[op.id]; return n; });
+            }
+        } finally {
+            setAiLoadingIds(prev => { const n = new Set(prev); n.delete(op.id); return n; });
+        }
+    };
 
     if (!isOpen) return null;
 
@@ -448,15 +488,24 @@ export function AddAPIToolDialog({
                                                     onClick={(e) => e.stopPropagation()}
                                                 />
                                                 <InputFieldLabel htmlFor={`desc-${op.id}`}>Description *</InputFieldLabel>
-                                                <CustomInput
-                                                    id={`desc-${op.id}`}
-                                                    type="text"
-                                                    placeholder={op.summary || 'Describe what this tool does'}
-                                                    value={customDescriptions[op.id] || ''}
-                                                    onChange={(e) => handleCustomDescriptionChange(op.id, e.target.value)}
-                                                    onBlur={() => handleDescriptionBlur(op.id)}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                />
+                                                <DescriptionRow>
+                                                    <CustomInput
+                                                        id={`desc-${op.id}`}
+                                                        type="text"
+                                                        placeholder={op.summary || 'Describe what this tool does'}
+                                                        value={customDescriptions[op.id] || ''}
+                                                        onChange={(e) => handleCustomDescriptionChange(op.id, e.target.value)}
+                                                        onBlur={() => handleDescriptionBlur(op.id)}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    />
+                                                    <FillAIBtn
+                                                        type="button"
+                                                        disabled={aiLoadingIds.has(op.id)}
+                                                        onClick={(e) => { e.stopPropagation(); handleFillWithAI(op); }}
+                                                    >
+                                                        {aiLoadingIds.has(op.id) ? 'Filling...' : 'Fill With AI'}
+                                                    </FillAIBtn>
+                                                </DescriptionRow>
                                                 {descriptionErrors[op.id] && <InputError>{descriptionErrors[op.id]}</InputError>}
                                             </CustomInputsContainer>
                                         )}
