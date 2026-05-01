@@ -28,7 +28,7 @@ import * as pathModule from 'path';
 import { getUsedInboundPorts } from './utils';
 
 const CORS_ALLOW_ORIGIN_VALUE = '*';
-const CORS_ALLOW_METHODS_VALUE = 'GET, POST, DELETE, OPTIONS';
+const CORS_ALLOW_METHODS_VALUE = 'GET, POST, OPTIONS';
 const CORS_ALLOW_HEADERS_VALUE = 'Content-Type, Mcp-Session-Id';
 const CORS_EXPOSE_HEADERS_VALUE = 'Mcp-Session-Id';
 const SSE_KEEPALIVE_INTERVAL_MS = 30000;
