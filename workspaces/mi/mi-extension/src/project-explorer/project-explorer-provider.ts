@@ -210,6 +210,8 @@ async function generateTreeDataOfArtifacts(project: vscode.WorkspaceFolder, data
 		let children;
 		if (['APIs', 'Event Integrations', 'Automations', 'Data Services'].includes(key)) {
 			children = genProjectStructureEntry(artifacts[key]);
+		} else if (key === 'MCP Servers') {
+			children = generateMcpServers(artifacts[key]);
 		} else if (key === 'Resources') {
 			const existingResources = await getAvailableRegistryResources(project.uri.fsPath);
 			children = generateResources(artifacts[key], existingResources);
@@ -243,6 +245,10 @@ function getArtifactConfig(key: string) {
 		'Data Services': {
 			folderName: 'artifacts/data-services',
 			contextValue: 'dataServices'
+		},
+		'MCP Servers': {
+			folderName: '',
+			contextValue: 'mcpServers'
 		},
 		'Other Artifacts': {
 			folderName: '',
@@ -842,6 +848,57 @@ function getMesaaageStoreIcon(messageStoreType: MessageStoreTypes): string {
 	return icon;
 }
 
+
+function generateMcpServers(data: any[]): ProjectExplorerEntry[] {
+	const result: ProjectExplorerEntry[] = [];
+	for (const server of data) {
+		const serverEntry = new ProjectExplorerEntry(
+			server.name,
+			isCollapsibleState(true),
+			{ name: server.name, type: 'MCP_SERVER', path: server.localEntry?.path ?? '' },
+			'inbound-endpoint'
+		);
+		serverEntry.contextValue = 'mcpServer';
+
+		const children: ProjectExplorerEntry[] = [];
+
+		if (server.localEntry) {
+			const leEntry = new ProjectExplorerEntry(
+				server.localEntry.name,
+				isCollapsibleState(false),
+				server.localEntry,
+				'local-entry'
+			);
+			leEntry.contextValue = 'localEntry';
+			leEntry.command = {
+				title: 'Show Local Entry',
+				command: COMMANDS.SHOW_LOCAL_ENTRY,
+				arguments: [vscode.Uri.file(server.localEntry.path), undefined, false]
+			};
+			children.push(leEntry);
+		}
+
+		if (server.inboundEndpoint) {
+			const ieEntry = new ProjectExplorerEntry(
+				server.inboundEndpoint.name,
+				isCollapsibleState(false),
+				server.inboundEndpoint,
+				getInboundEndpointIcon(server.inboundEndpoint.subType as InboundEndpointTypes)
+			);
+			ieEntry.contextValue = 'inboundEndpoint';
+			ieEntry.command = {
+				title: 'Show Inbound Endpoint',
+				command: COMMANDS.SHOW_INBOUND_ENDPOINT,
+				arguments: [vscode.Uri.file(server.inboundEndpoint.path), undefined, false]
+			};
+			children.push(ieEntry);
+		}
+
+		serverEntry.children = children;
+		result.push(serverEntry);
+	}
+	return result;
+}
 
 function genProjectStructureEntry(data: ProjectStructureEntry[]): ProjectExplorerEntry[] {
 	const result: ProjectExplorerEntry[] = [];
