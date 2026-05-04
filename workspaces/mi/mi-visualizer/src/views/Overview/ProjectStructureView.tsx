@@ -264,6 +264,21 @@ const ProjectStructureView = (props: { projectStructure: any, workspaceDir: stri
         }
     };
 
+    const goToMcpServerTools = (entry: any) => {
+        const localEntryPath = entry.localEntry?.path ?? '';
+        const serverName = localEntryPath
+            ? localEntryPath.split('/').pop()?.replace('-mcp-config.xml', '') ?? entry.name
+            : entry.name;
+        rpcClient.getMiVisualizerRpcClient().openView({
+            type: EVENT_TYPE.OPEN_VIEW,
+            location: {
+                view: MACHINE_VIEW.MCPServerFromAPIsForm,
+                documentUri: localEntryPath,
+                customProps: { editData: { serverName, localEntryPath } },
+            },
+        });
+    };
+
     const goToConnectionView = async (documentUri: string, view: MACHINE_VIEW, connectionName: string) => {
         rpcClient.getMiVisualizerRpcClient().openView({
             type: EVENT_TYPE.OPEN_VIEW,
@@ -361,8 +376,8 @@ const ProjectStructureView = (props: { projectStructure: any, workspaceDir: stri
                                                 iconSx={artifactTypeMap[key].iconSx}
                                                 name={entry.name}
                                                 description={artifactTypeMap[key].description(entry)}
-                                                onClick={() => goToView(getEntryPath(entry), artifactTypeMap[key].view, entry.name)}
-                                                goToView={() => goToView(getEntryPath(entry), artifactTypeMap[key].view, entry.name)}
+                                                onClick={() => key === 'mcpServers' ? goToMcpServerTools(entry) : goToView(getEntryPath(entry), artifactTypeMap[key].view, entry.name)}
+                                                goToView={() => key === 'mcpServers' ? goToMcpServerTools(entry) : goToView(getEntryPath(entry), artifactTypeMap[key].view, entry.name)}
                                                 goToSource={() => goToSource(getEntryPath(entry))}
                                                 deleteArtifact={() => deleteArtifact(getEntryPath(entry))}
                                                 isMainSequence={entry.isMainSequence}

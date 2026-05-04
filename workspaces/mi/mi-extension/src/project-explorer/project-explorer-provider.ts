@@ -859,6 +859,11 @@ function generateMcpServers(data: any[]): ProjectExplorerEntry[] {
 			'inbound-endpoint'
 		);
 		serverEntry.contextValue = 'mcpServer';
+		serverEntry.command = {
+			title: 'Show MCP Server',
+			command: COMMANDS.SHOW_MCP_SERVER,
+			arguments: [server.localEntry?.path ?? '', server.name]
+		};
 
 		const children: ProjectExplorerEntry[] = [];
 

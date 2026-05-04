@@ -73,6 +73,7 @@ export const COMMANDS = {
     ADD_TEMPLATE_COMMAND: 'MI.project-explorer.add-template',
     ADD_DATA_SERVICE_COMMAND: 'MI.project-explorer.add-data-service',
     ADD_MCP_SERVER_COMMAND: 'MI.project-explorer.add-mcp-server',
+    SHOW_MCP_SERVER: 'MI.show.mcp-server',
     CREATE_PROJECT_COMMAND: 'MI.project-explorer.create-project',
     IMPORT_PROJECT_COMMAND: 'MI.project-explorer.import-project',
     REVEAL_ITEM_COMMAND: 'MI.project-explorer.revealItem',

@@ -216,10 +216,15 @@ export async function buildInputSchemasForAPITools(
             ? pathModule.basename(tool.apiXmlPath, pathModule.extname(tool.apiXmlPath))
             : tool.apiName;
 
-        const candidates = [
-            ...(rawVersion ? [`${xmlBaseName}_v${rawVersion}.yaml`] : []),
-            `${xmlBaseName}.yaml`,
-        ].map(f => pathModule.join(apiDefDir, f).toString());
+        // On Linux (case-sensitive), the YAML file is named after the API's `name` attribute
+        // (set at creation time) while the XML file may have a different case. Include both.
+        const baseNames = [...new Set([xmlBaseName, tool.apiName])];
+        const candidates = baseNames
+            .flatMap(base => [
+                ...(rawVersion ? [`${base}_v${rawVersion}.yaml`] : []),
+                `${base}.yaml`,
+            ])
+            .map(f => pathModule.join(apiDefDir, f).toString());
 
         let spec: any = null;
         for (const candidate of candidates) {

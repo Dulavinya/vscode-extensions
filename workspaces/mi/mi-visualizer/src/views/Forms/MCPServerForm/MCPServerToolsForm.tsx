@@ -136,6 +136,80 @@ const RemoveBtn = styled.button`
     &:hover { background: var(--vscode-button-secondaryHoverBackground); }
 `;
 
+const EditBtn = styled.button`
+    padding: 4px 8px;
+    font-size: 11px;
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    margin-right: 4px;
+    &:hover { background: var(--vscode-button-secondaryHoverBackground); }
+`;
+
+const InlineEditContainer = styled.div`
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+`;
+
+const InlineInput = styled.input`
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 3px;
+    padding: 4px 6px;
+    font-size: 12px;
+    width: 100%;
+    box-sizing: border-box;
+    &:focus { outline: 1px solid var(--vscode-focusBorder); border-color: var(--vscode-focusBorder); }
+`;
+
+const InlineTextarea = styled.textarea`
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 3px;
+    padding: 4px 6px;
+    font-size: 12px;
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+    min-height: 48px;
+    font-family: inherit;
+    &:focus { outline: 1px solid var(--vscode-focusBorder); border-color: var(--vscode-focusBorder); }
+`;
+
+const InlineEditActions = styled.div`
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+`;
+
+const SaveBtn = styled.button`
+    padding: 4px 10px;
+    font-size: 11px;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    &:hover { background: var(--vscode-button-hoverBackground); }
+`;
+
+const CancelEditBtn = styled.button`
+    padding: 4px 10px;
+    font-size: 11px;
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    &:hover { background: var(--vscode-button-secondaryHoverBackground); }
+`;
+
 const EmptyMessage = styled.div`
     color: var(--vscode-descriptionForeground);
     text-align: center;
@@ -322,6 +396,10 @@ export function MCPServerToolsForm({ path, editData }: MCPServerToolsFormProps) 
     const [showCreateScratchDialog, setShowCreateScratchDialog] = useState(false);
     const [showToolTypeSelector, setShowToolTypeSelector] = useState(false);
     const [selectedAPIForTool, setSelectedAPIForTool] = useState<string>('');
+    const [editingToolId, setEditingToolId] = useState<string | null>(null);
+    const [editToolName, setEditToolName] = useState('');
+    const [editToolDescription, setEditToolDescription] = useState('');
+    const [editToolInputSchema, setEditToolInputSchema] = useState('');
 
     // Auto-save helpers (edit mode only)
 
@@ -567,6 +645,28 @@ export function MCPServerToolsForm({ path, editData }: MCPServerToolsFormProps) 
         saveToolsToLocalEntry(updatedTools);
     };
 
+    const startEditTool = (tool: UnifiedTool) => {
+        setEditingToolId(tool.id);
+        setEditToolName(tool.name);
+        setEditToolDescription(tool.description);
+        setEditToolInputSchema(tool.kind === 'sequence' ? tool.inputSchema : '');
+    };
+
+    const saveEditTool = () => {
+        const updatedTools = tools.map(t => {
+            if (t.id !== editingToolId) return t;
+            const base = { ...t, name: editToolName.trim() || t.name, description: editToolDescription };
+            return t.kind === 'sequence' ? { ...base, inputSchema: editToolInputSchema } : base;
+        });
+        setTools(updatedTools);
+        saveToolsToLocalEntry(updatedTools);
+        setEditingToolId(null);
+    };
+
+    const cancelEditTool = () => {
+        setEditingToolId(null);
+    };
+
     // Submit
 
     const onSubmit = async (data: any) => {
@@ -784,28 +884,68 @@ export function MCPServerToolsForm({ path, editData }: MCPServerToolsFormProps) 
                                 ) : (
                                     <ToolsList>
                                         {tools.map(tool => (
-                                            <ToolItem key={tool.id}>
-                                                <ToolInfo>
-                                                    <ToolName>{tool.name}</ToolName>
-                                                    {tool.description && (
-                                                        <ToolDescription>{tool.description}</ToolDescription>
-                                                    )}
-                                                </ToolInfo>
-                                                {tool.kind === 'api' ? (
-                                                    <ToolMeta>
-                                                        {tool.operationMethod} {tool.operationPath} ({tool.apiName})
-                                                    </ToolMeta>
+                                            <ToolItem key={tool.id} style={editingToolId === tool.id ? { flexDirection: 'column', alignItems: 'stretch', gap: '8px' } : {}}>
+                                                {editingToolId === tool.id ? (
+                                                    <>
+                                                        <InlineEditContainer>
+                                                            <InlineInput
+                                                                value={editToolName}
+                                                                onChange={e => setEditToolName(e.target.value)}
+                                                                placeholder="Tool name"
+                                                                aria-label="Tool name"
+                                                            />
+                                                            <InlineTextarea
+                                                                value={editToolDescription}
+                                                                onChange={e => setEditToolDescription(e.target.value)}
+                                                                placeholder="Tool description"
+                                                                aria-label="Tool description"
+                                                            />
+                                                            {tool.kind === 'sequence' && (
+                                                                <InlineTextarea
+                                                                    value={editToolInputSchema}
+                                                                    onChange={e => setEditToolInputSchema(e.target.value)}
+                                                                    placeholder='Input schema (JSON), e.g. {"type":"object","properties":{}}'
+                                                                    aria-label="Input schema"
+                                                                    style={{ minHeight: '72px', fontFamily: 'monospace' }}
+                                                                />
+                                                            )}
+                                                        </InlineEditContainer>
+                                                        <InlineEditActions>
+                                                            <CancelEditBtn onClick={cancelEditTool}>Cancel</CancelEditBtn>
+                                                            <SaveBtn onClick={saveEditTool}>Save</SaveBtn>
+                                                        </InlineEditActions>
+                                                    </>
                                                 ) : (
-                                                    <ToolMeta>
-                                                        SEQUENCE · {tool.sequenceName}
-                                                    </ToolMeta>
+                                                    <>
+                                                        <ToolInfo>
+                                                            <ToolName>{tool.name}</ToolName>
+                                                            {tool.description && (
+                                                                <ToolDescription>{tool.description}</ToolDescription>
+                                                            )}
+                                                        </ToolInfo>
+                                                        {tool.kind === 'api' ? (
+                                                            <ToolMeta>
+                                                                {tool.operationMethod} {tool.operationPath} ({tool.apiName})
+                                                            </ToolMeta>
+                                                        ) : (
+                                                            <ToolMeta>
+                                                                SEQUENCE · {tool.sequenceName}
+                                                            </ToolMeta>
+                                                        )}
+                                                        <EditBtn
+                                                            onClick={() => startEditTool(tool)}
+                                                            aria-label={`Edit tool ${tool.name}`}
+                                                        >
+                                                            Edit
+                                                        </EditBtn>
+                                                        <RemoveBtn
+                                                            onClick={() => removeTool(tool.id)}
+                                                            aria-label={`Remove tool ${tool.name}`}
+                                                        >
+                                                            ✕
+                                                        </RemoveBtn>
+                                                    </>
                                                 )}
-                                                <RemoveBtn
-                                                    onClick={() => removeTool(tool.id)}
-                                                    aria-label={`Remove tool ${tool.name}`}
-                                                >
-                                                    ✕
-                                                </RemoveBtn>
                                             </ToolItem>
                                         ))}
                                     </ToolsList>
