@@ -148,6 +148,7 @@ const EditBtn = styled.button`
     &:hover { background: var(--vscode-button-secondaryHoverBackground); }
 `;
 
+
 const InlineEditContainer = styled.div`
     display: flex;
     flex-direction: column;
@@ -639,6 +640,32 @@ export function MCPServerToolsForm({ path, editData }: MCPServerToolsFormProps) 
         }
     };
 
+    const goToToolSource = (tool: UnifiedTool) => {
+        if (tool.kind === 'api') {
+            const api = apis.find(a => a.name === tool.apiName);
+            const xmlPath = tool.apiXmlPath || api?.xmlPath || '';
+            if (!xmlPath) return;
+
+            // Derive the resource index: unique paths in operation order match the XML resource array order
+            const uniquePaths = api ? [...new Set(api.operations.map(op => op.path))] : [];
+            const resourceIndex = uniquePaths.indexOf(tool.operationPath);
+
+            rpcClient.getMiVisualizerRpcClient().openView({
+                type: EVENT_TYPE.OPEN_VIEW,
+                location: resourceIndex >= 0
+                    ? { view: MACHINE_VIEW.ResourceView, documentUri: xmlPath, identifier: resourceIndex.toString() }
+                    : { view: MACHINE_VIEW.ServiceDesigner, documentUri: xmlPath },
+            });
+        } else {
+            const xmlPath = tool.sequenceXmlPath || sequences.find(s => s.name === tool.sequenceName)?.xmlPath || '';
+            if (!xmlPath) return;
+            rpcClient.getMiVisualizerRpcClient().openView({
+                type: EVENT_TYPE.OPEN_VIEW,
+                location: { view: MACHINE_VIEW.SequenceView, documentUri: xmlPath },
+            });
+        }
+    };
+
     const removeTool = (toolId: string) => {
         const updatedTools = tools.filter(t => t.id !== toolId);
         setTools(updatedTools);
@@ -884,7 +911,12 @@ export function MCPServerToolsForm({ path, editData }: MCPServerToolsFormProps) 
                                 ) : (
                                     <ToolsList>
                                         {tools.map(tool => (
-                                            <ToolItem key={tool.id} style={editingToolId === tool.id ? { flexDirection: 'column', alignItems: 'stretch', gap: '8px' } : {}}>
+                                            <ToolItem
+                                                key={tool.id}
+                                                style={editingToolId === tool.id ? { flexDirection: 'column', alignItems: 'stretch', gap: '8px' } : { cursor: 'pointer' }}
+                                                onClick={() => editingToolId !== tool.id && goToToolSource(tool)}
+                                                title={tool.kind === 'api' ? `Open API: ${tool.apiName}` : `Open sequence: ${tool.sequenceName}`}
+                                            >
                                                 {editingToolId === tool.id ? (
                                                     <>
                                                         <InlineEditContainer>
@@ -933,13 +965,13 @@ export function MCPServerToolsForm({ path, editData }: MCPServerToolsFormProps) 
                                                             </ToolMeta>
                                                         )}
                                                         <EditBtn
-                                                            onClick={() => startEditTool(tool)}
+                                                            onClick={e => { e.stopPropagation(); startEditTool(tool); }}
                                                             aria-label={`Edit tool ${tool.name}`}
                                                         >
                                                             Edit
                                                         </EditBtn>
                                                         <RemoveBtn
-                                                            onClick={() => removeTool(tool.id)}
+                                                            onClick={e => { e.stopPropagation(); removeTool(tool.id); }}
                                                             aria-label={`Remove tool ${tool.name}`}
                                                         >
                                                             ✕
