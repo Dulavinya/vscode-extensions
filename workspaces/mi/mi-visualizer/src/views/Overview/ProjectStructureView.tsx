@@ -300,6 +300,17 @@ const ProjectStructureView = (props: { projectStructure: any, workspaceDir: stri
         });
     }
 
+    const deleteMCPServer = (entry: any) => {
+        const inboundPath = entry.inboundEndpoint?.path;
+        const localEntryPath = entry.localEntry?.path;
+        if (inboundPath) {
+            rpcClient.getMiDiagramRpcClient().deleteArtifact({ path: inboundPath, enableUndo: false });
+        }
+        if (localEntryPath) {
+            rpcClient.getMiDiagramRpcClient().deleteArtifact({ path: localEntryPath, enableUndo: false });
+        }
+    }
+
     const markAsDefaultSequence = (path: string, remove: boolean) => {
         rpcClient.getMiDiagramRpcClient().markAsDefaultSequence({ path, remove });
     }
@@ -379,7 +390,7 @@ const ProjectStructureView = (props: { projectStructure: any, workspaceDir: stri
                                                 onClick={() => key === 'mcpServers' ? goToMcpServerTools(entry) : goToView(getEntryPath(entry), artifactTypeMap[key].view, entry.name)}
                                                 goToView={() => key === 'mcpServers' ? goToMcpServerTools(entry) : goToView(getEntryPath(entry), artifactTypeMap[key].view, entry.name)}
                                                 goToSource={() => goToSource(getEntryPath(entry))}
-                                                deleteArtifact={() => deleteArtifact(getEntryPath(entry))}
+                                                deleteArtifact={() => key === 'mcpServers' ? deleteMCPServer(entry) : deleteArtifact(getEntryPath(entry))}
                                                 isMainSequence={entry.isMainSequence}
                                                 markAsDefaultSequence={artifactTypeMap[key].title == "Sequences" ? () => markAsDefaultSequence(getEntryPath(entry), entry.isMainSequence) : undefined}
                                             />
