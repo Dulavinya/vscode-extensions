@@ -144,6 +144,8 @@ const OperationItemHeader = styled.div`
     display: flex;
     align-items: center;
     gap: 10px;
+    cursor: pointer;
+    user-select: none;
 `;
 
 const OperationCheckbox = styled.input`
@@ -217,6 +219,8 @@ const SelectAllRow = styled.div`
     padding: 8px 12px;
     border-bottom: 1px solid var(--vscode-panel-border);
     background: var(--vscode-list-activeSelectionBackground);
+    cursor: pointer;
+    user-select: none;
 `;
 
 const SelectAllLabel = styled.label`
@@ -446,24 +450,26 @@ export function AddAPIToolDialog({
                         </DialogLabel>
                         {selectedAPI.operations.length > 0 ? (
                             <OperationsList>
-                                <SelectAllRow>
+                                <SelectAllRow onClick={handleSelectAll}>
                                     <OperationCheckbox
                                         type="checkbox"
                                         checked={allSelected}
                                         onChange={handleSelectAll}
+                                        onClick={(e) => e.stopPropagation()}
                                         id="select-all"
                                     />
-                                    <SelectAllLabel htmlFor="select-all">
+                                    <SelectAllLabel onClick={(e) => e.stopPropagation()} htmlFor="select-all">
                                         <strong>Select All Operations</strong>
                                     </SelectAllLabel>
                                 </SelectAllRow>
                                 {selectedAPI.operations.map((op: APIOperation) => (
                                     <OperationItem key={op.id}>
-                                        <OperationItemHeader>
+                                        <OperationItemHeader onClick={() => handleOperationToggle(op.id)}>
                                             <OperationCheckbox
                                                 type="checkbox"
                                                 checked={selectedOperationIds.has(op.id)}
                                                 onChange={() => handleOperationToggle(op.id)}
+                                                onClick={(e) => e.stopPropagation()}
                                                 id={`op-${op.id}`}
                                             />
                                             <OperationDetails>

@@ -89,6 +89,8 @@ const SequenceItemHeader = styled.div`
     display: flex;
     align-items: center;
     gap: 10px;
+    cursor: pointer;
+    user-select: none;
 `;
 
 const SequenceCheckbox = styled.input`
@@ -110,6 +112,8 @@ const SelectAllRow = styled.div`
     padding: 8px 12px;
     border-bottom: 1px solid var(--vscode-panel-border);
     background: var(--vscode-list-activeSelectionBackground);
+    cursor: pointer;
+    user-select: none;
 `;
 
 const SelectAllLabel = styled.label`
@@ -390,24 +394,26 @@ export function AddSequenceToolDialog({ isOpen, sequences, onConfirm, onCancel }
                         <EmptyMessage>No sequences found in the project</EmptyMessage>
                     ) : (
                         <SequencesList>
-                            <SelectAllRow>
+                            <SelectAllRow onClick={handleSelectAll}>
                                 <SequenceCheckbox
                                     type="checkbox"
                                     checked={allSelected}
                                     onChange={handleSelectAll}
+                                    onClick={e => e.stopPropagation()}
                                     id="select-all-sequences"
                                 />
-                                <SelectAllLabel htmlFor="select-all-sequences">
+                                <SelectAllLabel onClick={e => e.stopPropagation()} htmlFor="select-all-sequences">
                                     <strong>Select All Sequences</strong>
                                 </SelectAllLabel>
                             </SelectAllRow>
                             {sequences.map(seq => (
                                 <SequenceItem key={seq.id}>
-                                    <SequenceItemHeader>
+                                    <SequenceItemHeader onClick={() => toggleSequence(seq.id)}>
                                         <SequenceCheckbox
                                             type="checkbox"
                                             checked={selectedIds.has(seq.id)}
                                             onChange={() => toggleSequence(seq.id)}
+                                            onClick={e => e.stopPropagation()}
                                             id={`seq-${seq.id}`}
                                         />
                                         <SequenceName>{seq.name}</SequenceName>
